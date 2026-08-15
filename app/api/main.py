@@ -93,36 +93,39 @@ async def healthz(response: Response) -> dict:
 
 @app.get("/readyz")
 async def readyz(response: Response) -> dict:
-    """Readiness: should traffic be routed here right now?
-
-    Opposite philosophy to /healthz. This one DOES check dependencies. A
-    failure removes the instance from the load balancer WITHOUT killing it,
-    so it can recover and rejoin. That is why dependency checks belong here
-    and never in liveness.
-    """
+    pool = app.state.pg
+    idle = pool.get_idle_size()
+    size = pool.get_size()
+    max_size = pool.get_max_size()
+    saturation = 1 - (idle / max_size) if max_size else 0.0
 
     async def check(name: str, coro) -> tuple[str, str]:
         try:
-            # Bounded wait. A hung backend must not hang the probe itself --
-            # otherwise the prober times out and the orchestrator cannot tell
-            # "dependency is slow" from "process is wedged".
             await asyncio.wait_for(coro, timeout=2.0)
             return name, "ok"
         except Exception as exc:
             return name, f"fail: {type(exc).__name__}"
 
-    results = dict(
-        await asyncio.gather(
-            check("postgres", app.state.pg.fetchval("SELECT 1")),
-            check("redis", app.state.redis.ping()),
-        )
-    )
+    # Only Redis gets an active probe. Postgres health is read from pool
+    # stats -- free, instant, doesn't queue behind real traffic.
+    redis_name, redis_status = await check("redis", app.state.redis.ping())
 
-    ready = all(v == "ok" for v in results.values())
+    pg_status = "ok"
+    if saturation >= 0.9:
+        pg_status = "degraded: pool saturated"
+    elif size == 0:
+        # Pool never successfully opened a connection at all -- genuinely down.
+        pg_status = "fail: no connections"
+
+    ready = pg_status == "ok" and redis_status == "ok"
     if not ready:
         response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
 
-    return {"ready": ready, "dependencies": results}
+    return {
+        "ready": ready,
+        "dependencies": {"postgres": pg_status, "redis": redis_status},
+        "pool": {"size": size, "idle": idle, "max": max_size, "saturation": round(saturation, 2)},
+    }
 
 @app.get("/debug/block")
 async def debug_block(seconds: float = 8.0) -> dict:
