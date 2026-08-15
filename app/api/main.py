@@ -4,6 +4,10 @@ import asyncio
 import time
 from contextlib import asynccontextmanager
 
+import asyncpg
+from redis.asyncio import Redis
+from app.core.config import get_settings
+
 from fastapi import FastAPI, Response, status
 
 # How often the heartbeat wakes up.
@@ -39,6 +43,11 @@ async def lifespan(app: FastAPI):
                 app.state.worst_lag_s = lag
 
     settings = get_settings()
+    app.state.pg = await asyncpg.create_pool(
+        settings.postgres_dsn, min_size=1, max_size=10
+    )
+    app.state.redis = Redis.from_url(settings.redis_dsn, decode_responses=True)
+    
     task = asyncio.create_task(heartbeat())
     # Hold a reference. asyncio only keeps weak references to tasks, so a
     # task with no strong reference can be garbage collected mid-flight.
@@ -49,6 +58,8 @@ async def lifespan(app: FastAPI):
         yield
     finally:
         task.cancel()
+        await app.state.pg.close()
+        await app.state.redis.aclose()
         try:
             await task
         except asyncio.CancelledError:
@@ -80,6 +91,38 @@ async def healthz(response: Response) -> dict:
         "worst_lag_s": round(app.state.worst_lag_s, 3),
     }
 
+@app.get("/readyz")
+async def readyz(response: Response) -> dict:
+    """Readiness: should traffic be routed here right now?
+
+    Opposite philosophy to /healthz. This one DOES check dependencies. A
+    failure removes the instance from the load balancer WITHOUT killing it,
+    so it can recover and rejoin. That is why dependency checks belong here
+    and never in liveness.
+    """
+
+    async def check(name: str, coro) -> tuple[str, str]:
+        try:
+            # Bounded wait. A hung backend must not hang the probe itself --
+            # otherwise the prober times out and the orchestrator cannot tell
+            # "dependency is slow" from "process is wedged".
+            await asyncio.wait_for(coro, timeout=2.0)
+            return name, "ok"
+        except Exception as exc:
+            return name, f"fail: {type(exc).__name__}"
+
+    results = dict(
+        await asyncio.gather(
+            check("postgres", app.state.pg.fetchval("SELECT 1")),
+            check("redis", app.state.redis.ping()),
+        )
+    )
+
+    ready = all(v == "ok" for v in results.values())
+    if not ready:
+        response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+
+    return {"ready": ready, "dependencies": results}
 
 @app.get("/debug/block")
 async def debug_block(seconds: float = 8.0) -> dict:
