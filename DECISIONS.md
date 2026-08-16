@@ -48,3 +48,30 @@ provably from Gemini, since OpenAI could not have answered.
     checking citation format (unverifiable_citations in generate.py) needs
     to tolerate this variance or it will misflag real Gemini citations as
     fabricated purely due to formatting differences, not content errors.
+
+---
+
+## D15 — Rate limiting via virtual keys, verified by exceeding the limit; SDK default retries hide 429s
+**Chose:** Application uses a scoped virtual key (rpm_limit=5, max_budget=$1/24h,
+models=["fast"] only), never the master key, for regular traffic. Master
+key reserved for admin operations (creating/managing keys) only.
+**Because:** Verified directly, not assumed from config. First test (default
+AsyncOpenAI client) showed all 7 requests "succeeding" with an unexplained
+pause -- looked like the limit did nothing. Checking LiteLLM's own logs
+directly revealed the truth: request 6 WAS correctly rejected with a 429
+("Current limit: 5, Remaining: 0"), but the OpenAI SDK's default retry
+behavior caught it, waited, and retried automatically -- entirely inside
+the client, invisible to application code and to our own test script.
+**Cost / open risk:** Any code using the default AsyncOpenAI client against
+this gateway will silently absorb rate-limit rejections as added latency,
+not visible errors. Under real load this means "user requests are
+mysteriously slow" with no application-level signal that a limit was hit --
+the only way to see it is checking gateway logs directly, which does not
+scale as an operational practice. RESOLVED: need to either (a) set
+max_retries=0 explicitly and handle 429s in application code with a clear
+user-facing signal, or (b) keep retries but log/emit a metric whenever the
+underlying client actually retried, so rate-limit pressure is visible in
+our own telemetry (Phase 0's LLMCall span -- retry count belongs there).
+Not yet implemented; tracked as follow-up before Phase 5 (latency work)
+where a hidden retry delay would directly corrupt our own latency
+measurements without us knowing why.
