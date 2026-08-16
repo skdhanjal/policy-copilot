@@ -105,8 +105,15 @@ _CITE_PATTERN = re.compile(r"\[cite:\s*([\w.()\-]+)\]")
 
 async def generate(result: RetrievalResult, question: str) -> GeneratedAnswer:
     settings = get_settings()
-    client = AsyncOpenAI(api_key=settings.openai_api_key)
-
+    # Points at the LiteLLM gateway, not OpenAI directly. Same SDK, because
+    # LiteLLM speaks the OpenAI API format regardless of which real provider
+    # it routes to underneath -- this is ADR-4 (DESIGN.md): application code
+    # never names a vendor, only an alias ("fast").
+    
+    client = AsyncOpenAI(
+        api_key=settings.litellm_master_key,
+        base_url=f"{settings.gateway_base_url}/v1",
+    )
     context = _render_context(result)
     if not context.strip():
         return GeneratedAnswer(
@@ -115,7 +122,7 @@ async def generate(result: RetrievalResult, question: str) -> GeneratedAnswer:
         )
 
     response = await client.chat.completions.create(
-        model="gpt-4o-mini",
+        model="fast",
         messages=[
             {"role": "system", "content": _SYSTEM_PROMPT},
             {"role": "user", "content": f"{context}\n\nQuestion: {question}"},

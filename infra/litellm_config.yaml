@@ -1,0 +1,26 @@
+# LiteLLM proxy config. Application code never sees a vendor name -- it asks
+# for one of these aliases (ADR-4). Swapping which real model/provider sits
+# behind an alias is a config edit here, never a code change in generate.py.
+
+model_list:
+  - model_name: fast
+    litellm_params:
+      model: openai/gpt-4o-mini
+      api_key: os.environ/OPENAI_API_KEY
+
+  - model_name: fast
+    litellm_params:
+      model: gemini/gemini-2.5-flash
+      api_key: os.environ/GEMINI_API_KEY
+    # Two entries sharing model_name "fast" is intentional -- this is how
+    # LiteLLM expresses a fallback GROUP. Requests to "fast" try the first
+    # entry; if it fails, LiteLLM tries the next entry with the same name.
+
+litellm_settings:
+  drop_params: true  # silently drop provider-specific params the other
+                      # provider doesn't support, rather than erroring --
+                      # necessary because OpenAI and Gemini don't accept
+                      # identical parameter sets.
+
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY

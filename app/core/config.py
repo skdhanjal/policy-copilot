@@ -6,8 +6,11 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     environment: Literal["local", "staging", "prod"] = "local"
+    gateway_base_url: str = "http://localhost:4000"
     revision: str = "dev"
+    litellm_master_key: str
     openai_api_key: str
+    gemini_api_key: str
     postgres_dsn: str
     redis_dsn: str
 

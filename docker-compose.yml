@@ -18,6 +18,17 @@ services:
     image: redis:7-alpine
     ports:
       - "6379:6379"
+  litellm:
+    image: ghcr.io/berriai/litellm:v1.94.2
+    environment:
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY}
+    ports:
+      - "4000:4000"
+    volumes:
+      - ./infra/litellm_config.yaml:/app/config.yaml:ro
+    command: ["--config", "/app/config.yaml", "--port", "4000"]
 
 volumes:
   pgdata:

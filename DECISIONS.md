@@ -24,3 +24,27 @@ matters most. Mitigated by pairing every no-change/abstention item with a
 deterministic check; not solved, since deterministic checks don't scale to
 domains without an obvious ground-truth computation the way "are these
 texts byte-identical" does.
+
+---
+
+## D14 — LiteLLM gateway, fallback verified by deliberate failure injection
+**Chose:** LiteLLM proxy (pinned v1.94.2, not `main-latest`), OpenAI as
+primary under alias "fast", Gemini 2.5 Flash as fallback in the same alias
+group. Application code (generate.py) only ever references "fast" -- ADR-4
+realized in code.
+**Because:** Fallback groups are only trustworthy once proven to actually
+fire, not just configured. Verified by deliberately injecting an invalid
+OpenAI key and confirming a real, correct answer still came back --
+provably from Gemini, since OpenAI could not have answered.
+**Cost, found during setup, not assumed:**
+  - `main-latest` produced "exec format error" on confirmed matching
+    x86_64 hardware -- almost certainly a broken/mismatched publish on
+    that floating tag. Pinning to a signed release tag fixed it.
+  - `gemini-1.5-flash` returned 404 -- Gemini 1.0 and 1.5 are fully
+    shut down as of this session. Fixed to `gemini-2.5-flash`.
+  - Model parity is NOT guaranteed across the fallback: same question,
+    same prompt, OpenAI cited "314.3" while Gemini cited "314.3(a)" --
+    different citation granularity from the same instructions. Any code
+    checking citation format (unverifiable_citations in generate.py) needs
+    to tolerate this variance or it will misflag real Gemini citations as
+    fabricated purely due to formatting differences, not content errors.
