@@ -62,6 +62,20 @@
     A response stating 2023-11-13 is a FAIL regardless of how fluent or
     well-cited it otherwise reads.
 
+    METRIC FINDING: Ragas faithfulness scores this exact failure at 1.0
+    (verified twice, including one properly-reproduced run after fixing a
+    detector bug in the test harness itself). Faithfulness checks whether
+    claim content traces to the context AS A WHOLE, not whether it is bound
+    to the correct entity/date within a multi-version context -- structurally
+    blind to this failure class. Custom deterministic check built
+    (app/rag/eval_metrics.py: check_date_bindings) correctly flags the
+    misattributed sentence as content_verified=False. KNOWN LIMITATION of
+    the custom check: cannot distinguish a correct negative claim ("X was
+    absent in version Y") from an incorrect positive claim -- both currently
+    produce content_verified=False, since the check only tests word overlap,
+    not claim polarity. Acceptable for a first pass; flagged for Phase 2
+    if negation claims turn out to be common in real usage.
+
 - id: adversarial-citation-priority-001
   category: adversarial
   source: captured
