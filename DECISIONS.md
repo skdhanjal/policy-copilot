@@ -99,3 +99,23 @@ defects. Worth the general lesson: an unexpected result is at least as
 often a wrong assumption in the test as a bug in the thing being tested,
 and /key/info-style introspection endpoints are what let you tell the
 difference instead of guessing.
+
+---
+
+## D17 — D15 resolved: explicit rate_limited signal, no silent SDK retries
+**Chose:** generate.py's OpenAI client now sets max_retries=0. A caught
+RateLimitError produces a GeneratedAnswer with rate_limited=True and an
+honest user-facing message, instead of either an uncaught exception or
+the SDK's previous silent retry-and-wait behavior.
+**Because:** D15 identified that default SDK retries hid real 429
+rejections as invisible added latency. Verified fix directly: 7 requests
+against a 5/minute limit now show requests 1-5 succeeding normally and
+6-7 failing immediately and visibly with rate_limited=True, rather than
+all 7 "succeeding" after a hidden delay.
+**Cost:** The caller (eventually the API layer, Phase 8's dashboards) must
+now actually check `rate_limited` and handle it -- e.g., surface a retry
+prompt to the user. A caller that ignores the field and only reads `.text`
+would show the literal fallback message as if it were a real answer, which
+is honest but not a good user experience on its own. Follow-up for Phase 5
+or the API layer: translate rate_limited=True into a proper HTTP 429 at
+the FastAPI boundary, not just a string in the response body.

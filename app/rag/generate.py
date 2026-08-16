@@ -1,10 +1,12 @@
-"""Phase 1 single-shot generation.
+"""Single-shot generation, routed through the LiteLLM gateway (Phase 3).
 
-Deliberately minimal: one prompt, one model call, no agent loop (Phase 7),
-no guardrails (Phase 6), no gateway routing (Phase 3). Direct OpenAI client,
-not behind a gateway -- same reasoning as embed.py: one call site, no
-routing/fallback/budget need yet. This module is exactly what Phase 3 will
-delete and replace with a gateway call; kept small on purpose.
+One prompt, one model call, no agent loop (Phase 7), no guardrails
+(Phase 6) yet. Application code never references a vendor model name --
+only the "fast" alias (ADR-4). Provider fallback (OpenAI -> Gemini),
+rate limiting, and budget enforcement are all handled by the gateway
+itself; this module only needs to react to a rate_limited response
+honestly (see GeneratedAnswer.rate_limited, DECISIONS.md D15), not
+implement any of that logic locally.
 
 Enforces the trust boundary designed in context.py: retrieved text is
 fenced and explicitly labelled as data, never instructions. This is the
@@ -16,8 +18,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-from openai import AsyncOpenAI
-
+from openai import AsyncOpenAI, RateLimitError
 from app.core.config import get_settings
 from app.rag.retrieval import RetrievalResult
 
@@ -57,6 +58,11 @@ class GeneratedAnswer:
     # actually retrieved -- a fabrication, caught mechanically rather than
     # trusted on the model's word.
     unverifiable_citations: list[str]
+    # True when the gateway rejected this request for rate-limit or budget
+    # reasons (see DECISIONS.md D15). Distinguished from a normal answer so
+    # a caller can show "please retry shortly" instead of treating this as
+    # a real, if disappointing, answer to the question.
+    rate_limited: bool = False
 
 
 def _render_context(result: RetrievalResult) -> str:
@@ -109,10 +115,16 @@ async def generate(result: RetrievalResult, question: str) -> GeneratedAnswer:
     # LiteLLM speaks the OpenAI API format regardless of which real provider
     # it routes to underneath -- this is ADR-4 (DESIGN.md): application code
     # never names a vendor, only an alias ("fast").
-    
+    #
+    # max_retries=0 is deliberate (DECISIONS.md D15). The SDK's default
+    # retry behavior silently absorbed a real 429 rate-limit rejection
+    # during gateway testing -- the request "succeeded" from the caller's
+    # view, just slower, with no signal a limit was ever hit. Retrying
+    # invisibly is the SDK's choice, not ours to inherit by default.
     client = AsyncOpenAI(
         api_key=settings.gateway_app_key,
         base_url=f"{settings.gateway_base_url}/v1",
+        max_retries=0,
     )
     context = _render_context(result)
     if not context.strip():
@@ -121,14 +133,24 @@ async def generate(result: RetrievalResult, question: str) -> GeneratedAnswer:
             cited_sections=[], unverifiable_citations=[],
         )
 
-    response = await client.chat.completions.create(
-        model="fast",
-        messages=[
-            {"role": "system", "content": _SYSTEM_PROMPT},
-            {"role": "user", "content": f"{context}\n\nQuestion: {question}"},
-        ],
-        temperature=0,
-    )
+    try:
+        response = await client.chat.completions.create(
+            model="fast",
+            messages=[
+                {"role": "system", "content": _SYSTEM_PROMPT},
+                {"role": "user", "content": f"{context}\n\nQuestion: {question}"},
+            ],
+            temperature=0,
+        )
+    except RateLimitError as exc:
+        # Caught specifically, not a bare `except Exception` -- a real bug
+        # elsewhere (bad prompt, malformed request) should still raise and
+        # be visible, not get relabeled as a rate limit.
+        return GeneratedAnswer(
+            text="The system is currently rate-limited or over budget. Please try again shortly.",
+            cited_sections=[], unverifiable_citations=[], rate_limited=True,
+        )
+
     text = response.choices[0].message.content or ""
 
     cited = _CITE_PATTERN.findall(text)
