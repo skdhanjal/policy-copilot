@@ -16,6 +16,7 @@
 # worth preserving from real testing -- expand from here.
 
 - id: point-in-time-001
+  checks: ['faithfulness', 'citation_presence']
   category: lookup
   source: captured
   question: "what does 314.3 require"
@@ -32,6 +33,7 @@
     a real regression, not noise.
 
 - id: diachronic-notification-event-001
+  checks: ['faithfulness', 'date_binding', 'citation_presence']
   category: diachronic
   source: captured
   question: "has 314.2 changed since 2023"
@@ -77,6 +79,7 @@
     if negation claims turn out to be common in real usage.
 
 - id: adversarial-citation-priority-001
+  checks: ['citation_coverage']
   category: adversarial
   source: captured
   question: "has 314.2 changed since 2023"
@@ -97,6 +100,7 @@
     its prose about the topic in general is accurate.
 
 - id: unanswerable-pre-window-001
+  checks: ['faithfulness', 'abstention']
   category: unanswerable
   source: captured
   question: "how has 12 CFR 1005.18's payroll card provisions changed in the last two years"
@@ -116,6 +120,7 @@
     scope rather than implying the section is simply static by nature.
 
 - id: diachronic-section-reorg-001
+  checks: ['abstention', 'citation_presence']
   category: diachronic
   source: captured
   question: "did 17 CFR 275.211(h) get removed"
@@ -139,6 +144,7 @@
     correct.
 
 - id: hallucination-fabricated-comparison-001
+  checks: ['faithfulness', 'date_binding', 'abstention']
   category: diachronic
   source: captured
   question: "how has 12 CFR 1005.18's payroll card provisions changed in the last two years"
@@ -169,6 +175,7 @@
     'no change' for this question going forward.
 
 - id: citation-format-unreliable-001
+  checks: ['citation_presence']
   category: diachronic
   source: captured
   question: "has 314.2 changed since 2023"
