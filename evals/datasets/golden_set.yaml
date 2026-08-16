@@ -1,0 +1,175 @@
+# Phase 1 golden set.
+#
+# Two kinds of item live here, and the `source` field distinguishes them:
+#
+#   source: designed   -- hand-written to exercise a category we predicted
+#                          would matter (see DESIGN.md's category list).
+#   source: captured    -- a REAL failure or behavior we observed while
+#                          testing this session, with actual measured
+#                          numbers, not hypothetical severity. These are
+#                          more valuable than designed cases because we
+#                          already know exactly what breaks and why.
+#
+# Target distribution once fleshed out (DESIGN.md Phase 1 exit criteria):
+# 60+ items across lookup / multi_policy / diachronic / historical /
+# unanswerable / adversarial. This file currently holds the seed items
+# worth preserving from real testing -- expand from here.
+
+- id: point-in-time-001
+  category: lookup
+  source: captured
+  question: "what does 314.3 require"
+  jurisdiction: null
+  expected_intent: point_in_time
+  expected_family: cfr-16-314
+  expected_section: "314.3"
+  expected_answer_contains: ["information security program", "administrative", "technical", "physical safeguards"]
+  rubric: >
+    Verified correct in testing: model stayed entirely on 314.3, did not
+    wander into 314.4 despite 314.3's own text referencing it by name.
+    unverifiable_citations was empty. Use as a REGRESSION baseline -- if
+    future changes cause this to start citing unrelated sections, that's
+    a real regression, not noise.
+
+- id: diachronic-notification-event-001
+  category: diachronic
+  source: captured
+  question: "has 314.2 changed since 2023"
+  jurisdiction: null
+  expected_intent: diachronic
+  expected_family: cfr-16-314
+  expected_section: "314.2"
+  expected_versions: 5
+  expected_answer_contains: ["2024-05-13", "notification event"]
+  must_not_claim: >
+    That the "notification event" definition (subsection m) appears in the
+    2023-11-13 version. Independently verified against expand_lineage()
+    output: the phrase "notification event" is absent from every version
+    through 2023-11-13 and present only starting 2024-05-13.
+  rubric: >
+    CAPTURED FAILURE, not hypothetical. gpt-4o-mini, given correct,
+    independently-verified, correctly-labeled context (confirmed by
+    inspecting the literal rendered prompt block-by-block against ground
+    truth), non-deterministically misattributes this definition's
+    introduction to the 2023-11-13 version instead of 2024-05-13.
+    Measured: 2 of 3 runs wrong at temperature=0, identical input.
+    A targeted system-prompt instruction explicitly warning against
+    exactly this failure mode ("only attribute a term to a version if it
+    appears verbatim in that version's block") did NOT reliably fix it --
+    kept in the prompt as harmless, but this item exists because the fix
+    is unproven and needs systematic tracking, not a single re-run.
+    PASS requires: correctly states 2024-05-13 as the introduction date.
+    A response stating 2023-11-13 is a FAIL regardless of how fluent or
+    well-cited it otherwise reads.
+
+- id: adversarial-citation-priority-001
+  category: adversarial
+  source: captured
+  question: "has 314.2 changed since 2023"
+  jurisdiction: null
+  rubric: >
+    Not adversarial in the injection sense -- adversarial against our OWN
+    retrieval mechanism. Verified failure mode: semantic search alone
+    scored an UNRELATED section (314.5, whose text happens to contain the
+    word "effective") at 0.455, higher than every other candidate, and
+    never surfaced 314.2 -- the section literally named in the question --
+    anywhere in the top 8 results. Fixed by extracting explicit CFR
+    citations and routing them directly (current_chunk lookup for
+    point-in-time, expand_lineage for diachronic) rather than trusting
+    embedding similarity to rank a literal citation correctly.
+    PASS requires: when a question contains an explicit section number,
+    that exact section must appear in resolved/lineage output. A response
+    that never engages with the literally-cited section is a FAIL even if
+    its prose about the topic in general is accurate.
+
+- id: unanswerable-pre-window-001
+  category: unanswerable
+  source: captured
+  question: "how has 12 CFR 1005.18's payroll card provisions changed in the last two years"
+  jurisdiction: null
+  expected_outcome: insufficient_context_or_no_change
+  rubric: >
+    CAPTURED, from real ingest data. 1005.18's actual amendment history
+    (verified via the eCFR versions API directly) is entirely PRE-2020:
+    2017-01-01, 2017-04-25, 2018-02-13, 2019-04-01, 2019-11-14 (x2, one
+    non-substantive). Our ingested window for this family starts
+    2020-07-21. All 5 ingested versions of 1005.18 are therefore
+    byte-identical (verified: 63354 chars, all 5 versions, confirmed via
+    direct text comparison). A system without awareness of this should
+    correctly report "no change observed in the available version
+    history" -- NOT confidently claim recent changes it cannot support,
+    and ideally should flag that its visibility is bounded by ingest
+    scope rather than implying the section is simply static by nature.
+
+- id: diachronic-section-reorg-001
+  category: diachronic
+  source: captured
+  question: "did 17 CFR 275.211(h) get removed"
+  jurisdiction: null
+  expected_family: cfr-17-275
+  rubric: >
+    CAPTURED, from real ingest data. Confirmed via direct SQL EXCEPT query:
+    section_path 275.211(h)(1)-1, -2, 275.211(h)(2)-1/2/3, and
+    275.206(4)-9/10 (7 sections total) exist in the 2024-11-18 snapshot
+    and are absent from 2024-11-19 -- one day later. NOT independently
+    verified whether this is a genuine repeal or a same-day renumbering
+    (SEC marketing-rule amendments around this period plausibly
+    reorganized adjacent sections under new citations). This is a KNOWN,
+    DOCUMENTED AMBIGUITY (see DESIGN.md Section 6), not a confirmed fact.
+    PASS requires: the system reports the section_path's disappearance
+    from current numbering AS OBSERVED, and explicitly flags the
+    ambiguity (may be renumbering, not confirmed repeal). A response
+    that flatly asserts "this requirement was eliminated" without that
+    caveat overclaims beyond what our own verification supports, and is
+    a FAIL even though the underlying observation (section_path gone) is
+    correct.
+
+- id: hallucination-fabricated-comparison-001
+  category: diachronic
+  source: captured
+  question: "how has 12 CFR 1005.18's payroll card provisions changed in the last two years"
+  jurisdiction: null
+  expected_outcome: no_change_detected
+  rubric: >
+    CAPTURED FAILURE, more severe than diachronic-notification-event-001.
+    Given retrieved context confirmed byte-identical across all 5 ingested
+    versions (verified independently via expand_lineage: all 5 texts equal,
+    63354 chars each), the model fabricated a full structural comparison
+    between "March 20, 2023" and "October 1, 2025" versions, inventing
+    specific subsection labels (e.g. "(b)(2)(xiv)") and describing content
+    as if genuine differences existed. This is not a misattributed date on
+    top of a real change (contrast diachronic-notification-event-001) --
+    it is a manufactured narrative of change where verified ground truth
+    shows none. Retrieval was correct; generation invented content wholesale.
+    PASS requires: explicit statement that no change was found across the
+    versions shown. A structured, confident comparison for this question is
+    an automatic FAIL regardless of surface plausibility.
+
+    STATUS: FIXED (verified). Root cause: model was asked to judge identity
+    from raw text itself. Fix: identity is now computed deterministically in
+    _render_context() (exact string comparison) and stated directly in the
+    prompt rather than left as an inference task. Re-tested 3/3 correct
+    after fix, versus the unrelated diachronic-notification-event-001 fix
+    attempt (a soft prompt instruction) which only achieved 1/3. Kept as a
+    permanent regression test -- this exact code path must keep producing
+    'no change' for this question going forward.
+
+- id: citation-format-unreliable-001
+  category: diachronic
+  source: captured
+  question: "has 314.2 changed since 2023"
+  jurisdiction: null
+  rubric: >
+    CAPTURED, mechanism gap not a content error. In one run, the model
+    produced factually-grounded prose (matching real retrieved content,
+    near-verbatim quote of the actual 314.2(m) text) but emitted ZERO
+    [cite: ...] tags despite an explicit system-prompt instruction to cite
+    every claim in that format. Result: cited=[] , unverifiable=[] -- the
+    fabrication-detection mechanism (unverifiable_citations) is SILENT in
+    this case, not because nothing needed checking, but because it has
+    nothing to check. This means citation-format compliance itself needs
+    to be measured and enforced (e.g. reject/retry a response with zero
+    citations when the answer contains specific factual claims), or the
+    mechanical safety check built in generate.py cannot be trusted to fire
+    when it matters. PASS requires: at least one [cite: ...] tag present
+    when the answer contains specific quoted or paraphrased regulatory text.
