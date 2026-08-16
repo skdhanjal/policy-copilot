@@ -75,3 +75,27 @@ our own telemetry (Phase 0's LLMCall span -- retry count belongs there).
 Not yet implemented; tracked as follow-up before Phase 5 (latency work)
 where a hidden retry delay would directly corrupt our own latency
 measurements without us knowing why.
+
+---
+
+## D16 — Budget enforcement verified, first test miscalibrated by real pricing
+**Chose:** Budget caps verified via a virtual key with max_budget set BELOW
+a real measured call cost, not guessed.
+**Because:** First attempt used max_budget=$0.0001, assuming a single
+gpt-4o-mini call would exceed it. All 3 test calls succeeded --
+investigated via /key/info (which itself required debugging: curl's -G
+flag combined with a JSON -d body produced a malformed request that
+failed silently with HTTP 000, resolved by passing the key as a plain
+query parameter instead) and found real spend was $0.0000735 for all
+three calls combined -- genuinely BELOW the $0.0001 budget. Not a
+tracking or enforcement bug; the test threshold was simply larger than
+real cost. Recalibrated to $0.00001 (below one call's ~$0.0000245
+measured cost) and re-ran: request 1 succeeded, requests 2+ correctly
+rejected with 429 "budget_exceeded", exact spend and limit in the error
+message.
+**Cost:** None on the gateway side -- both failures were test-design
+errors (wrong threshold, wrong curl flag combination), not gateway
+defects. Worth the general lesson: an unexpected result is at least as
+often a wrong assumption in the test as a bug in the thing being tested,
+and /key/info-style introspection endpoints are what let you tell the
+difference instead of guessing.

@@ -7,6 +7,7 @@ class Settings(BaseSettings):
 
     environment: Literal["local", "staging", "prod"] = "local"
     gateway_base_url: str = "http://localhost:4000"
+    gateway_app_key: str
     revision: str = "dev"
     litellm_master_key: str
     openai_api_key: str
