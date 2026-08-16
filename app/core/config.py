@@ -7,7 +7,7 @@ class Settings(BaseSettings):
 
     environment: Literal["local", "staging", "prod"] = "local"
     revision: str = "dev"
-
+    openai_api_key: str
     postgres_dsn: str
     redis_dsn: str
 
