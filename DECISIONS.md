@@ -119,3 +119,30 @@ would show the literal fallback message as if it were a real answer, which
 is honest but not a good user experience on its own. Follow-up for Phase 5
 or the API layer: translate rate_limited=True into a proper HTTP 429 at
 the FastAPI boundary, not just a string in the response body.
+
+---
+
+## D18 — Ragas judge calls bypass the gateway entirely; deliberate deferral, not fixed
+**Chose:** Ragas metric calls continue going directly to OpenAI via
+LangChain's own credential lookup, NOT through the LiteLLM gateway.
+Fixed the immediate crash by exporting OPENAI_API_KEY into the shell.
+**Because:** Discovered while wiring answer_relevancy/context_quality --
+Ragas uses langchain_openai internally, which reads the raw OS
+OPENAI_API_KEY environment variable directly, completely independent of
+our pydantic-settings/.env mechanism AND independent of the gateway.
+Every Ragas call all session (including every faithfulness score used to
+find D13) has been going straight to OpenAI, not through LiteLLM --
+worked only because a real key happened to be in the environment; broke
+the moment that stopped being reliably true.
+**Cost / open gap:** This is a real inconsistency with ADR-4 ("no vendor
+SDK outside the gateway client"). Eval-judge spend is invisible to our
+gateway's cost tracking and budget enforcement (D16) -- it could exceed a
+key's budget with zero gateway-level signal, since it never touches the
+gateway at all. The export-based fix is SESSION-SCOPED ONLY: a new
+terminal requires re-exporting or evals crash again. Not fixed properly
+because eval traffic was judged a different class from production traffic
+(not user-facing, no fallback/rate-limit need) -- deferred, not resolved.
+Follow-up: either configure LangChain's OpenAI client to point at the
+gateway's base_url explicitly (langchain_openai supports a base_url
+param), or accept this permanently and document eval cost as untracked
+by design.

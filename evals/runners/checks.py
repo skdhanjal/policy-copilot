@@ -8,7 +8,12 @@ from __future__ import annotations
 
 from datasets import Dataset
 from ragas import evaluate
-from ragas.metrics import faithfulness as ragas_faithfulness
+from ragas.metrics import (
+    faithfulness as ragas_faithfulness,
+    answer_relevancy as ragas_answer_relevancy,
+    context_precision as ragas_context_precision,
+    context_recall as ragas_context_recall,
+)
 
 from app.rag.eval_metrics import check_date_bindings
 from app.rag.generate import GeneratedAnswer, _render_context
@@ -38,6 +43,65 @@ async def check_faithfulness(question: str, answer: GeneratedAnswer, result: Ret
         ),
     }
 
+async def check_answer_relevancy(question: str, answer: GeneratedAnswer, result: RetrievalResult) -> dict:
+    """Different question from faithfulness: not 'is this grounded in
+    context' but 'does this answer actually address what was asked'. An
+    answer can be perfectly faithful and still dodge the question -- e.g.
+    a diachronic question answered using only current-version facts, fully
+    grounded, but not actually answering whether anything changed."""
+    context_text = _render_context(result)
+    contexts = [c.strip() for c in context_text.split("<<<DOC") if c.strip()]
+    if not contexts:
+        return {"passed": None, "score": None, "note": "no context to evaluate against"}
+
+    dataset = Dataset.from_dict({
+        "question": [question], "answer": [answer.text], "contexts": [contexts],
+    })
+    scores = evaluate(dataset, metrics=[ragas_answer_relevancy])
+    score = scores["answer_relevancy"][0]
+    return {
+        "passed": score >= 0.7,
+        "score": score,
+        "note": "Measures topical relevance to the question, not factual correctness or groundedness.",
+    }
+
+
+async def check_context_quality(question: str, answer: GeneratedAnswer, result: RetrievalResult) -> dict:
+    """Grades RETRIEVAL, not generation -- context_precision needs no
+    ground truth (is retrieved context relevant to the question);
+    context_recall DOES need ground truth (did retrieval get everything
+    needed) and is skipped gracefully when an item has no expected_answer,
+    rather than failing the whole check."""
+    context_text = _render_context(result)
+    contexts = [c.strip() for c in context_text.split("<<<DOC") if c.strip()]
+    if not contexts:
+        return {"passed": None, "note": "no context to evaluate against"}
+
+    out = {}
+
+    dataset = Dataset.from_dict({
+        "question": [question], "answer": [answer.text], "contexts": [contexts],
+    })
+    precision_scores = evaluate(dataset, metrics=[ragas_context_precision])
+    out["context_precision"] = precision_scores["context_precision"][0]
+
+    ground_truth = getattr(check_context_quality, "_current_ground_truth", None)
+    if ground_truth:
+        recall_dataset = Dataset.from_dict({
+            "question": [question], "answer": [answer.text],
+            "contexts": [contexts], "ground_truth": [ground_truth],
+        })
+        recall_scores = evaluate(recall_dataset, metrics=[ragas_context_recall])
+        out["context_recall"] = recall_scores["context_recall"][0]
+    else:
+        out["context_recall"] = None
+        out["context_recall_note"] = "skipped -- no expected_answer/ground_truth on this golden-set item"
+
+    return {
+        "passed": out["context_precision"] >= 0.7,
+        **out,
+        "note": "context_precision needs no ground truth; context_recall does and is skipped when absent.",
+    }
 
 async def check_date_binding(question: str, answer: GeneratedAnswer, result: RetrievalResult) -> dict:
     if not result.lineages:
@@ -129,6 +193,8 @@ async def check_abstention(question: str, answer: GeneratedAnswer, result: Retri
 
 CHECK_DISPATCH = {
     "faithfulness": check_faithfulness,
+    "answer_relevancy": check_answer_relevancy,
+    "context_quality": check_context_quality,
     "date_binding": check_date_binding,
     "citation_presence": check_citation_presence,
     "citation_coverage": check_citation_coverage,

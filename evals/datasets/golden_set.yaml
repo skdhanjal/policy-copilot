@@ -16,7 +16,7 @@
 # worth preserving from real testing -- expand from here.
 
 - id: point-in-time-001
-  checks: ['faithfulness', 'citation_presence']
+  checks: ['faithfulness', 'answer_relevancy', 'context_quality', 'citation_presence']
   category: lookup
   source: captured
   question: "what does 314.3 require"
