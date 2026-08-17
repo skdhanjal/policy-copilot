@@ -25,6 +25,7 @@
   expected_family: cfr-16-314
   expected_section: "314.3"
   expected_answer_contains: ["information security program", "administrative", "technical", "physical safeguards"]
+  expected_answer: "Section 314.3 requires a comprehensive information security program with administrative, technical, and physical safeguards appropriate to the organization's size and complexity, the nature and scope of its activities, and the sensitivity of customer information, including the elements specified in 314.4."
   rubric: >
     Verified correct in testing: model stayed entirely on 314.3, did not
     wander into 314.4 despite 314.3's own text referencing it by name.

@@ -67,42 +67,51 @@ async def check_answer_relevancy(question: str, answer: GeneratedAnswer, result:
 
 
 async def check_context_quality(question: str, answer: GeneratedAnswer, result: RetrievalResult) -> dict:
-    """Grades RETRIEVAL, not generation -- context_precision needs no
-    ground truth (is retrieved context relevant to the question);
-    context_recall DOES need ground truth (did retrieval get everything
-    needed) and is skipped gracefully when an item has no expected_answer,
-    rather than failing the whole check."""
+    """Grades RETRIEVAL, not generation.
+
+    CORRECTED (was wrong originally): assumed context_precision needed no
+    ground truth, based on prior research. Running it for real threw
+    ValueError requiring a 'reference' column -- this Ragas version's
+    context_precision DOES need ground truth, same as context_recall.
+    Both are now gated on the same expected_answer field, skipped
+    together when absent, rather than one crashing and one silently
+    working as originally (wrongly) designed.
+    """
     context_text = _render_context(result)
     contexts = [c.strip() for c in context_text.split("<<<DOC") if c.strip()]
     if not contexts:
         return {"passed": None, "note": "no context to evaluate against"}
 
-    out = {}
+    ground_truth = getattr(check_context_quality, "_current_ground_truth", None)
+    if not ground_truth:
+        return {
+            "passed": None,
+            "context_precision": None,
+            "context_recall": None,
+            "note": "skipped -- both context_precision and context_recall require expected_answer/ground_truth on this golden-set item, which is absent",
+        }
 
     dataset = Dataset.from_dict({
-        "question": [question], "answer": [answer.text], "contexts": [contexts],
+        "question": [question], "answer": [answer.text],
+        "contexts": [contexts], "reference": [ground_truth],
     })
     precision_scores = evaluate(dataset, metrics=[ragas_context_precision])
-    out["context_precision"] = precision_scores["context_precision"][0]
 
-    ground_truth = getattr(check_context_quality, "_current_ground_truth", None)
-    if ground_truth:
-        recall_dataset = Dataset.from_dict({
-            "question": [question], "answer": [answer.text],
-            "contexts": [contexts], "ground_truth": [ground_truth],
-        })
-        recall_scores = evaluate(recall_dataset, metrics=[ragas_context_recall])
-        out["context_recall"] = recall_scores["context_recall"][0]
-    else:
-        out["context_recall"] = None
-        out["context_recall_note"] = "skipped -- no expected_answer/ground_truth on this golden-set item"
+    recall_dataset = Dataset.from_dict({
+        "question": [question], "answer": [answer.text],
+        "contexts": [contexts], "ground_truth": [ground_truth],
+    })
+    recall_scores = evaluate(recall_dataset, metrics=[ragas_context_recall])
 
+    precision = precision_scores["context_precision"][0]
+    recall = recall_scores["context_recall"][0]
     return {
-        "passed": out["context_precision"] >= 0.7,
-        **out,
-        "note": "context_precision needs no ground truth; context_recall does and is skipped when absent.",
+        "passed": precision >= 0.7,
+        "context_precision": precision,
+        "context_recall": recall,
+        "note": "Both require ground truth (Ragas API confirmed, not assumed) -- skipped together when expected_answer is absent on the item.",
     }
-
+    
 async def check_date_binding(question: str, answer: GeneratedAnswer, result: RetrievalResult) -> dict:
     if not result.lineages:
         return {"passed": None, "note": "no lineage data -- not a diachronic case"}

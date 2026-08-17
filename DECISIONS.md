@@ -146,3 +146,19 @@ Follow-up: either configure LangChain's OpenAI client to point at the
 gateway's base_url explicitly (langchain_openai supports a base_url
 param), or accept this permanently and document eval cost as untracked
 by design.
+
+---
+
+## D19 — context_precision requires ground truth too; original design was wrong
+**Chose:** context_precision and context_recall are now gated together on
+the same expected_answer field, both skipped together when it's absent.
+**Because:** Original check_context_quality assumed context_precision
+needed no ground truth (based on prior research summarized in the
+metric-selection framework). Running it for real threw a ValueError
+requiring a 'reference' column. Corrected: context_precision wants the
+ground-truth field named 'reference'; context_recall wants the SAME data
+under the field name 'ground_truth' -- two different column names for
+one underlying concept, confirmed via the real API error, not
+documentation. General lesson, repeated again this session: verify a
+tool's actual required inputs by running it, don't trust a description
+of what it "should" need.
