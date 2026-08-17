@@ -162,3 +162,34 @@ one underlying concept, confirmed via the real API error, not
 documentation. General lesson, repeated again this session: verify a
 tool's actual required inputs by running it, don't trust a description
 of what it "should" need.
+
+---
+
+## D20 — CI gate built and correctly failing on first real run; left red, not downgraded
+**Chose:** evals/runners/ci_gate.py -- tiered severity (blocking vs
+informational per item), known_unreliable_checks downgrade specific
+checks to informational even on blocking items, regression detection
+against the previous saved report, absolute 70% floor as backstop.
+First real run: FAILS, correctly, on diachronic-notification-event-001
+(date_binding=0%, citation_presence=67%).
+**Because:** This is not a gate bug. date_binding=0% reflects the real,
+still-unresolved notification-event misattribution found earlier this
+session -- a soft prompt fix only achieved 1/3 improvement and was never
+fully resolved (unlike the structurally-similar fabricated-comparison
+case, D12, which WAS fully fixed via deterministic identity injection).
+A weaker gate checking only faithfulness (which scores this exact case
+100%, per D13) would have shown green here. This is the entire point of
+building custom checks: catching what the "obvious" metric misses.
+**Decision: left failing, not downgraded to informational.** Explicitly
+rejected quietly marking this item informational just because it's
+inconvenient right now -- a gate that gets softened the moment it
+catches something real stops being a gate. This failure is now a visible,
+tracked TODO: date-binding reliability on diachronic questions must
+improve before this item can honestly pass. Options for a real fix,
+not yet attempted: (a) a structural prompt rewrite requiring the model
+to quote verbatim from a specific version block before making any
+version-attributed claim, closer in spirit to D12's approach but for a
+case where identity can't be precomputed the way "are these texts equal"
+can; (b) a post-generation verification pass using check_date_bindings
+itself to catch and retry/flag bad attributions before returning an
+answer to the user, moving the check from eval-time to serve-time.

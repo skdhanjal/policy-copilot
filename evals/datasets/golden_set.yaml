@@ -16,6 +16,8 @@
 # worth preserving from real testing -- expand from here.
 
 - id: point-in-time-001
+  severity: blocking
+  known_unreliable_checks: []
   checks: ['faithfulness', 'answer_relevancy', 'context_quality', 'citation_presence']
   category: lookup
   source: captured
@@ -34,6 +36,8 @@
     a real regression, not noise.
 
 - id: diachronic-notification-event-001
+  severity: blocking
+  known_unreliable_checks: ['faithfulness']
   checks: ['faithfulness', 'date_binding', 'citation_presence']
   category: diachronic
   source: captured
@@ -80,6 +84,8 @@
     if negation claims turn out to be common in real usage.
 
 - id: adversarial-citation-priority-001
+  severity: blocking
+  known_unreliable_checks: []
   checks: ['citation_coverage']
   category: adversarial
   source: captured
@@ -101,6 +107,8 @@
     its prose about the topic in general is accurate.
 
 - id: unanswerable-pre-window-001
+  severity: informational
+  known_unreliable_checks: ['faithfulness']
   checks: ['faithfulness', 'abstention']
   category: unanswerable
   source: captured
@@ -121,6 +129,8 @@
     scope rather than implying the section is simply static by nature.
 
 - id: diachronic-section-reorg-001
+  severity: blocking
+  known_unreliable_checks: []
   checks: ['abstention', 'citation_presence']
   category: diachronic
   source: captured
@@ -145,6 +155,8 @@
     correct.
 
 - id: hallucination-fabricated-comparison-001
+  severity: blocking
+  known_unreliable_checks: ['faithfulness']
   checks: ['faithfulness', 'date_binding', 'abstention']
   category: diachronic
   source: captured
@@ -176,6 +188,8 @@
     'no change' for this question going forward.
 
 - id: citation-format-unreliable-001
+  severity: informational
+  known_unreliable_checks: ['citation_presence']
   checks: ['citation_presence']
   category: diachronic
   source: captured
