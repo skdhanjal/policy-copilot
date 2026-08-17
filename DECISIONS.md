@@ -193,3 +193,30 @@ case where identity can't be precomputed the way "are these texts equal"
 can; (b) a post-generation verification pass using check_date_bindings
 itself to catch and retry/flag bad attributions before returning an
 answer to the user, moving the check from eval-time to serve-time.
+
+---
+
+## D21 — Three real gaps found during golden-set exploration; batched for later fix
+**Chose:** Continue golden-set growth toward 50 items (breadth first);
+defer fixing the following three findings until exploration is complete,
+so all fixes happen with full system context rather than piecemeal.
+**Found, all via deliberate exploration, not assumption:**
+  1. extract_citations() only matches numeric CFR citations
+     ("314.2"-shaped), not regulation nicknames ("Reg E", "Reg P").
+     multi-policy-recordkeeping-comparison-001 asked about "Reg E"
+     explicitly and retrieval never found cfr-12-1005.
+  2. Generation abstains even when retrieval correctly surfaces multiple
+     relevant families (multi-policy-overlap-abstention-001) -- _SYSTEM_PROMPT
+     was written for single-family/version comparisons, has no explicit
+     instruction for cross-family synthesis.
+  3. HISTORICAL intent branch existed in original design (intent.py
+     comments still reference it) but was never rebuilt after the
+     always-diachronic classifier bug fix. "As of [date]" questions
+     silently fall through to DIACHRONIC. Verified NOT a correctness bug
+     (3/3 explored cases answered correctly) but a real efficiency gap --
+     pulls full version history (up to 8 chunks) instead of one targeted
+     lookup. Real Phase 4 token-cost finding.
+**Cost:** All three currently undocumented anywhere except individual
+golden-set item rubrics. This entry is the index -- when golden-set
+growth finishes, come back here for the fix list rather than
+re-discovering these by re-reading 50 item rubrics individually.
