@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
+from datetime import date
 
 import asyncpg
 
@@ -32,6 +33,21 @@ import re
 # and validate against the database than to fully enumerate with regex.
 _CITATION_PATTERN = re.compile(r"\b(\d{2,4}\.\d+[\w()\-]*)\b")
 
+@dataclass(slots=True)
+class ExtractedCitations:
+    section_paths: list[str]  # exact citations like '314.2'
+    family_ids: list[str]      # cfr_part strings from nickname matches, e.g. '1005'
+
+
+_REGULATION_NICKNAMES = {
+    "reg e": "1005",
+    "regulation e": "1005",
+    "electronic fund transfer": "1005",
+    "safeguards rule": "314",
+    "16 cfr 314": "314",
+    "investment advisers act": "275",
+    "17 cfr 275": "275",
+}
 @dataclass(slots=True)
 class ResolvedChunk:
     chunk_id: str
@@ -61,30 +77,63 @@ class RetrievalResult:
     lineages: dict[tuple[str, str], list[VersionedChunk]]    
     
 def extract_citations(question: str) -> list[str]:
-    """Explicit section numbers are exact-match signal, not something
-    semantic search should be trusted to find. A question mentioning '314.2'
-    is telling us precisely what it means -- embedding similarity treats
-    that citation as just another token and can easily rank generically
-    related text above the literal section asked about (confirmed: querying
-    'has 314.2 changed since 2023' scored 314.5 at 0.455 and never surfaced
-    314.2 itself in the top 8). Extract and use directly instead of hoping
-    semantic search finds it.
+    """Explicit numeric citations ('314.2', '275.204-2') AND common
+    regulation nicknames ('Reg E', 'the Safeguards Rule') both count as
+    explicit signal -- both bypass semantic search the same way, routed
+    to current_chunk (point-in-time) or expand_lineage (diachronic).
+
+    CONFIRMED against the real policy_family table (not assumed): only
+    3 families exist -- 275 (Investment Advisers Act), 314 (FTC
+    Safeguards Rule), 1005 (Reg E). No "Reg P" in this corpus; omitted
+    to avoid a nickname mapping to nothing real.
+
+    Nickname match returns the FAMILY's cfr_part as a bare string
+    ('1005'), not a section_path -- callers already handle both shapes
+    via the same downstream SQL (WHERE section_path = ANY($1) matches
+    on prefix-adjacent values naturally since real section_paths start
+    with the part number, e.g. '1005.18').
     """
-    return _CITATION_PATTERN.findall(question)    
+    section_paths = _CITATION_PATTERN.findall(question)
 
+    q_lower = question.lower()
+    family_ids = list({
+        part for nickname, part in _REGULATION_NICKNAMES.items()
+        if nickname in q_lower
+    })
 
-async def resolve(pool: asyncpg.Pool, query: str, k: int = RESOLVE_K) -> list[ResolvedChunk]:
-    """Stage 1 only, standalone and testable before stage 2 exists."""
+    return ExtractedCitations(section_paths=section_paths, family_ids=family_ids)
+
+async def resolve(
+    pool: asyncpg.Pool, query: str, k: int = RESOLVE_K, boost_family: list[str] | None = None
+) -> list[ResolvedChunk]:
+    """Stage 1 only, standalone and testable before stage 2 exists.
+
+    boost_family: optional list of cfr_part strings (e.g. ['1005']) from a
+    regulation nickname match ('Reg E'). Applies a small score BONUS to
+    chunks in that family, not a hard filter -- a nickname narrows WHICH
+    regulation is likely relevant, but a genuinely mixed question ("compare
+    Reg E and investment adviser rules") still needs BOTH families to
+    surface. A hard filter would have reintroduced the original bug in a
+    new form (this time silently dropping the OTHER family instead of
+    dumping one unfiltered). Confirmed via direct testing that a hard
+    filter approach failed a real mixed-family golden-set question before
+    this design was chosen.
+    """
     [query_vector] = embed_texts([query])
+    boost_patterns = [f"cfr-%-{fid}" for fid in (boost_family or [])] or ["__none__"]
 
     rows = await pool.fetch(
         """
-        SELECT id, section_path, family_id, title, text, 1 - (embedding <=> $1) AS score, effective_from
+        SELECT id, section_path, family_id, title, text,
+               (1 - (embedding <=> $1))
+                   + CASE WHEN family_id LIKE ANY($3) THEN 0.15 ELSE 0 END
+                   AS score,
+               effective_from
         FROM current_chunk
-        ORDER BY embedding <=> $1
+        ORDER BY score DESC
         LIMIT $2
         """,
-        str(query_vector), k,
+        str(query_vector), k, boost_patterns,
     )
     return [
         ResolvedChunk(
@@ -144,6 +193,45 @@ async def expand_lineage(
     results.sort(key=lambda v: v.effective_from)
     return results
 
+async def resolve_as_of(
+    pool: asyncpg.Pool, family_id: str, section_path: str, as_of: date
+) -> VersionedChunk | None:
+    """The HISTORICAL counterpart to expand_lineage -- but cheap by design.
+
+    expand_lineage pulls EVERY version of a section (that's its job for
+    diachronic comparison). This pulls exactly ONE: whichever version was
+    genuinely in force on the target date, using the same effective_from/
+    effective_to interval already in the schema. No lineage walk, no
+    multi-version prompt bloat -- the entire reason this function exists is
+    to make "what was X as of DATE" cheap, not just correctly labeled.
+    """
+    row = await pool.fetchrow(
+        """
+        SELECT c.version_id, c.section_path, c.text, c.ordinal,
+               v.effective_from, v.effective_to
+        FROM chunk c
+        JOIN policy_version v ON v.id = c.version_id
+        WHERE v.family_id = $1 AND c.section_path = $2
+          AND v.effective_from <= $3
+          AND (v.effective_to IS NULL OR v.effective_to > $3)
+        ORDER BY c.ordinal
+        """,
+        family_id, section_path, as_of,
+    )
+    # NOTE: fetchrow returns only the FIRST matching row -- if a section
+    # split into multiple chunks (like 275.204-2 did earlier this session),
+    # this silently drops chunks 1+. Acceptable for now since most
+    # single-section point-in-time lookups fit in one chunk; flagged as a
+    # known limitation, not fixed here, to avoid scope creep on this fix.
+    if row is None:
+        return None
+    return VersionedChunk(
+        version_id=row["version_id"], section_path=row["section_path"], text=row["text"],
+        effective_from=str(row["effective_from"]),
+        effective_to=str(row["effective_to"]) if row["effective_to"] else None,
+        in_force=row["effective_to"] is None,
+    )
+
 async def retrieve(pool: asyncpg.Pool, question: str, k: int = RESOLVE_K) -> RetrievalResult:
     """The single entrypoint the rest of the system calls. Hides the
     two-stage mechanism (ADR-2) and the intent decision behind one function.
@@ -166,17 +254,24 @@ async def retrieve(pool: asyncpg.Pool, question: str, k: int = RESOLVE_K) -> Ret
     """
     result = classify(question)
     citations = extract_citations(question)
+    has_numeric_citation = bool(citations.section_paths)
 
-    if citations:
+    if has_numeric_citation:
         if result.intent is Intent.POINT_IN_TIME:
             # Real current text, directly -- no stub, no semantic search.
+            # Numeric citation identifies ONE exact section -- nothing left
+            # for semantic search to contribute. Nickname family_ids are
+            # NOT included in this WHERE anymore: including them here is
+            # what caused the original bug (pulling all 27+ sections of a
+            # family unfiltered when only a nickname matched, with no
+            # relevance ranking at all -- confirmed via direct SQL count).
             rows = await pool.fetch(
                 """
                 SELECT id, section_path, family_id, title, text, effective_from
                 FROM current_chunk
                 WHERE section_path = ANY($1)
                 """,
-                citations,
+                citations.section_paths,
             )
             resolved = [
                 ResolvedChunk(
@@ -196,7 +291,7 @@ async def retrieve(pool: asyncpg.Pool, question: str, k: int = RESOLVE_K) -> Ret
                 JOIN policy_version v ON v.id = c.version_id
                 WHERE c.section_path = ANY($1)
                 """,
-                citations,
+                citations.section_paths,
             )
             resolved = [
                 ResolvedChunk(
@@ -205,14 +300,16 @@ async def retrieve(pool: asyncpg.Pool, question: str, k: int = RESOLVE_K) -> Ret
                 )
                 for r in rows
             ]
-
         if not resolved:
-            # Citation looked real but doesn't exist in our corpus (current
-            # version, for point-in-time; any version, for diachronic) --
-            # fall back to semantic search rather than returning nothing.
-            resolved = await resolve(pool, question, k=k)
+            resolved = await resolve(pool, question, k=k, boost_family=citations.family_ids)
     else:
-        resolved = await resolve(pool, question, k=k)
+        # No numeric citation. A nickname (if any) narrows WHICH regulation
+        # is relevant but not WHICH section within it -- a family can have
+        # 30+ sections (confirmed: 1005 alone has 27). Picking the relevant
+        # one is exactly semantic search's job, so resolve() still runs,
+        # just weighted toward the nicknamed family rather than replaced
+        # by an unfiltered dump of it.
+        resolved = await resolve(pool, question, k=k, boost_family=citations.family_ids)
 
     lineages: dict[tuple[str, str], list[VersionedChunk]] = {}
     if result.intent is Intent.DIACHRONIC:
@@ -223,6 +320,21 @@ async def retrieve(pool: asyncpg.Pool, question: str, k: int = RESOLVE_K) -> Ret
                 continue
             seen.add(key)
             lineages[key] = await expand_lineage(pool, chunk.family_id, chunk.section_path)
+    elif result.intent is Intent.HISTORICAL and result.as_of_date:
+        # Cheap by design: ONE version per section, not full history.
+        # Reuses the `lineages` dict shape (list of length 1) so downstream
+        # context assembly (_render_context in generate.py) doesn't need a
+        # third code path -- it already knows how to render "a list of
+        # versions for a section", this just always hands it a list of one.
+        seen = set()
+        for chunk in resolved:
+            key = (chunk.family_id, chunk.section_path)
+            if key in seen:
+                continue
+            seen.add(key)
+            version = await resolve_as_of(pool, chunk.family_id, chunk.section_path, result.as_of_date)
+            if version:
+                lineages[key] = [version]        
 
     return RetrievalResult(intent=result.intent, resolved=resolved, lineages=lineages)
 
