@@ -446,3 +446,28 @@ checked.
 "create this artifact" instruction spanning significant surrounding
 conversation, verify the artifact's real state on the user's machine
 before continuing to build on top of an assumption of what it contains.
+
+---
+
+## D24 — /healthz is a reserved path on Cloud Run; must rename the real liveness route
+**Chose:** Rename the liveness endpoint from /healthz to /health-live (or
+similar) for any Cloud Run deployment, including the eventual real
+deploy of app/api/main.py.
+**Because:** Discovered through a multi-step live debugging session:
+/readyz worked perfectly on the deployed service; /healthz consistently
+returned a Google-branded (not app-level) 404, on every URL form,
+including through an authenticated gcloud run services proxy tunnel that
+bypasses public edge routing entirely. No request ever appeared in
+container logs. Confirmed via Google's own documented issues page
+(cloud.google.com/run/docs/issues#ah) and corroborated by an identical,
+independently-reported Streamlit issue: /healthz is a RESERVED path on
+Cloud Run's serving infrastructure, intercepted before reaching the
+container, regardless of whether your app defines a route there.
+**Cost:** app/api/main.py (the REAL application, not just this scaffold
+test) currently uses /healthz as its liveness route name and will hit
+this exact same wall on its first real deploy if not renamed first.
+This must be fixed in the real app before Phase 8's actual production
+deploy, not just in this throwaway test. Also worth checking whether any
+other path names we've used elsewhere collide with other GCP-reserved
+prefixes -- this was found by accident, not by systematically checking
+Google's reserved-path documentation in advance.
