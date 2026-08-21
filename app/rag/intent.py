@@ -61,7 +61,15 @@ _CHANGE_KEYWORDS = re.compile(
 
 _CURRENT_STATE_KEYWORDS = re.compile(
     r"\b(what (is|are|does)|current(ly)?|require[sd]?|must|shall|"
-    r"how (much|long|many)|is .* required)\b",
+    r"how (much|long|many)|is .* required|"
+    # Added: real captured failures where present-tense lookup questions
+    # used phrasing our original list didn't cover -- "who qualifies as a
+    # service provider" and "what procedures apply to X" both wrongly hit
+    # DIACHRONIC/default_no_signal before this fix (see D21).
+    r"qualif(y|ies|ied) as|apply to|applies to|"
+    r"who (is|are)|what (must|kind)|"
+    r"does .* need to|"
+    r"is (defined|considered) as)\b",
     re.IGNORECASE,
 )
 
