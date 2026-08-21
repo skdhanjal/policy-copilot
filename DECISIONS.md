@@ -220,3 +220,31 @@ so all fixes happen with full system context rather than piecemeal.
 golden-set item rubrics. This entry is the index -- when golden-set
 growth finishes, come back here for the fix list rather than
 re-discovering these by re-reading 50 item rubrics individually.
+
+---
+
+## D22 — Phase 0's Cloud Run deploy exit criterion was never met; genuine gap, not a deferral
+**Chose:** Nothing yet -- flagging this honestly rather than retroactively
+justifying it as intentional.
+**Because:** DESIGN.md Phase 0 exit criteria explicitly states "first
+Cloud Run deploy succeeds." This never happened. Unlike every other
+deferred item this session (D1, D18, D21), there was no explicit decision
+to defer it, no stated reason, no tracked follow-up -- development simply
+moved to local-only setup (WSL, venv, Docker Compose) and the actual
+`gcloud run deploy` step was never executed. Caught only because it was
+directly asked about, not because it was noticed proactively.
+**Cost of the gap, concretely:**
+  - The Dockerfile has never been built and run as an actual container --
+    everything has run through the venv directly.
+  - Cloud SQL / Memorystore connection behavior under real GCP networking
+    (vs. Compose's service-name DNS) is unverified.
+  - Secret Manager injection is untested -- all secrets so far have come
+    from a local .env file, which does not exist on Cloud Run.
+  - ADR-1's own stated cost (instance freezing between requests breaking
+    background telemetry flush) has never been tested against real
+    behavior.
+**Next step:** A first real Cloud Run deploy attempt, now more valuable
+than it would have been at Phase 0 since there's a real system (gateway,
+generation, eval harness) to deploy rather than a bare health check --
+likely to surface genuine integration issues worth finding now rather
+than compounding further into Phase 4+.
