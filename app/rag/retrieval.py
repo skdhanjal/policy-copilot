@@ -15,7 +15,7 @@ time is structural (same citation), not semantic.
 from __future__ import annotations
 
 import asyncio
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date
 
 from app.rag.rerank import rerank
@@ -23,6 +23,7 @@ import asyncpg
 
 from app.rag.embed import embed_texts
 from app.rag.intent import Intent, classify
+from app.guardrails.pii import redact_pii
 
 RESOLVE_K = 8
 
@@ -74,10 +75,8 @@ class VersionedChunk:
 class RetrievalResult:
     intent: Intent
     resolved: list[ResolvedChunk]
-    # Populated only for diachronic queries -- one lineage list per distinct
-    # (family_id, section_path) pulled from the resolve step, so a
-    # multi-family query gets multi-family history, not just the top hit's.
-    lineages: dict[tuple[str, str], list[VersionedChunk]]    
+    lineages: dict[tuple[str, str], list[VersionedChunk]]
+    pii_found: list[str] = field(default_factory=list)
     
 def extract_citations(question: str) -> ExtractedCitations:
     """Explicit numeric citations ('314.2', '275.204-2') AND common
@@ -255,6 +254,7 @@ async def retrieve(pool: asyncpg.Pool, question: str, k: int = RESOLVE_K) -> Ret
     real current text directly; diachronic keeps the stub, since
     expand_lineage supplies the real content for that path.
     """
+    question, pii_found = redact_pii(question)
     result = classify(question)
     citations = extract_citations(question)
     has_numeric_citation = bool(citations.section_paths)
@@ -342,7 +342,7 @@ async def retrieve(pool: asyncpg.Pool, question: str, k: int = RESOLVE_K) -> Ret
             if version:
                 lineages[key] = [version]        
 
-    return RetrievalResult(intent=result.intent, resolved=resolved, lineages=lineages)
+    return RetrievalResult(intent=result.intent, resolved=resolved, lineages=lineages, pii_found=pii_found)
 
 
 async def _main():
