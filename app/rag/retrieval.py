@@ -18,6 +18,7 @@ import asyncio
 from dataclasses import dataclass
 from datetime import date
 
+from app.rag.rerank import rerank
 import asyncpg
 
 from app.rag.embed import embed_texts
@@ -312,6 +313,9 @@ async def retrieve(pool: asyncpg.Pool, question: str, k: int = RESOLVE_K) -> Ret
         # just weighted toward the nicknamed family rather than replaced
         # by an unfiltered dump of it.
         resolved = await resolve(pool, question, k=k, boost_family=citations.family_ids)
+        
+    if resolved and not resolved[0].text == "":  # skip stub rows (diachronic citation shortcuts)
+        resolved = rerank(question, resolved, top_n=min(4, len(resolved)))    
 
     lineages: dict[tuple[str, str], list[VersionedChunk]] = {}
     if result.intent is Intent.DIACHRONIC:
