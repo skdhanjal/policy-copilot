@@ -21,6 +21,7 @@ from dataclasses import dataclass
 from openai import AsyncOpenAI, RateLimitError
 from app.core.config import get_settings
 from app.rag.retrieval import RetrievalResult
+from app.telemetry.llm_span import LLMCall
 
 _OPEN, _CLOSE = "<<<DOC", "DOC>>>"
 
@@ -63,6 +64,11 @@ class GeneratedAnswer:
     # a caller can show "please retry shortly" instead of treating this as
     # a real, if disappointing, answer to the question.
     rate_limited: bool = False
+    # Real token/cost accounting for this call, including provider prompt
+    # caching (D26: confirmed ~90% cost reduction on repeated prefixes).
+    # None on early-return paths (no context found, rate-limited) since no
+    # real API call was made to measure.
+    llm_call: LLMCall | None = None
 
 
 def _render_context(result: RetrievalResult) -> str:
@@ -153,9 +159,22 @@ async def generate(result: RetrievalResult, question: str) -> GeneratedAnswer:
 
     text = response.choices[0].message.content or ""
 
+    usage = response.usage
+    cached = 0
+    if usage and usage.prompt_tokens_details:
+        cached = usage.prompt_tokens_details.cached_tokens or 0
+
+    llm_call = LLMCall(
+        alias="fast",
+        question=question,
+        prompt_tokens=usage.prompt_tokens if usage else 0,
+        cached_prompt_tokens=cached,
+        completion_tokens=usage.completion_tokens if usage else 0,
+    )
+
     cited = _CITE_PATTERN.findall(text)
     known_sections = {c.section_path for c in result.resolved if c.text}
     known_sections |= {sec for (_, sec) in result.lineages.keys()}
     unverifiable = [c for c in cited if c not in known_sections]
 
-    return GeneratedAnswer(text=text, cited_sections=cited, unverifiable_citations=unverifiable)
+    return GeneratedAnswer(text=text, cited_sections=cited, unverifiable_citations=unverifiable, llm_call=llm_call)
