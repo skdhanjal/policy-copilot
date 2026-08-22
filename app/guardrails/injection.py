@@ -7,8 +7,8 @@ this module."""
 import re
 
 _INJECTION_PATTERNS = re.compile(
-    r"\bignore (previous|prior|all|the above) instructions?\b|"
-    r"\bdisregard (previous|prior|all) instructions?\b|"
+    r"\bignore (previous|prior|all|the above).{0,20}instructions?\b|"
+    r"\bdisregard (the above|previous|prior|all).{0,20}instructions?\b|"
     r"\byou are now\b|\bforget (your|all) (previous )?instructions?\b|"
     r"\bsystem prompt\b|\breveal your (instructions|prompt)\b|"
     r"\bact as if\b|\bpretend (you are|to be)\b|"
