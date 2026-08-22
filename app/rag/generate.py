@@ -77,6 +77,7 @@ class GeneratedAnswer:
     # real API call was made to measure.
     llm_call: LLMCall | None = None
     output_pii_leak: list[str] = field(default_factory=list)
+    grounding_failed: bool = False
 
 
 def _render_context(result: RetrievalResult) -> str:
@@ -215,7 +216,8 @@ async def generate(result: RetrievalResult, question: str,  redis: Redis | None 
         cited_sections=cited, 
         unverifiable_citations=unverifiable, 
         llm_call=llm_call, 
-        output_pii_leak=output_pii_leak
+        output_pii_leak=output_pii_leak,
+        grounding_failed=len(unverifiable) > 0
     )
 
 
