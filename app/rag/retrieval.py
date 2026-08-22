@@ -122,7 +122,7 @@ async def resolve(
     filter approach failed a real mixed-family golden-set question before
     this design was chosen.
     """
-    [query_vector] = embed_texts([query])
+    [query_vector] = await asyncio.to_thread(embed_texts, [query])
     boost_patterns = [f"cfr-%-{fid}" for fid in (boost_family or [])] or ["__none__"]
 
     rows = await pool.fetch(
@@ -315,7 +315,7 @@ async def retrieve(pool: asyncpg.Pool, question: str, k: int = RESOLVE_K) -> Ret
         resolved = await resolve(pool, question, k=k, boost_family=citations.family_ids)
         
     if resolved and not resolved[0].text == "":  # skip stub rows (diachronic citation shortcuts)
-        resolved = rerank(question, resolved, top_n=min(4, len(resolved)))    
+        resolved = await asyncio.to_thread(rerank, question, resolved, min(4, len(resolved)))
 
     lineages: dict[tuple[str, str], list[VersionedChunk]] = {}
     if result.intent is Intent.DIACHRONIC:
