@@ -69,8 +69,8 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="Policy Copilot", lifespan=lifespan)
 
 
-@app.get("/healthz")
-async def healthz(response: Response) -> dict:
+@app.get("/health-live")
+async def health_live(response: Response) -> dict:
     """Liveness. Checks nothing external, on purpose.
 
     Note what this can and cannot see: if the loop is blocked right now, this
