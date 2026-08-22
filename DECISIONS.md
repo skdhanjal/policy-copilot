@@ -552,3 +552,15 @@ to avoid the two silently drifting apart (e.g. if pricing changes and
 only one side gets updated). Follow-up: Phase 8's dashboards should pull
 from /spend/logs directly rather than aggregating our own LLMCall
 records.
+
+---
+
+## D28 -- Prompt compression: truncation unsafe, safe stripping yields ~0%
+Tested truncation (max_chars) on real CFR text: dropped substantive
+legal conditions ((A)-(D) clauses), confirmed unsafe. Removed. Safe-only
+compression (whitespace/boilerplate) measured 0% savings on real chunks
+-- ingest already normalizes whitespace, CFR text has little filler.
+Conclusion: compression is not a viable Phase 4 win for this corpus.
+Real savings come from caching + reranking (done), not compression.
+Not pursuing model-based compression (LLMLingua) given low expected ROI
+and added complexity/risk for dense legal text specifically.
