@@ -523,3 +523,32 @@ built in Phase 0 specifically for this) is not yet populated anywhere.
 generate.py needs to read resp.usage.prompt_tokens_details.cached_tokens
 and set it on the LLMCall span, or this real, measured saving remains
 invisible in our own cost dashboards despite genuinely happening.
+
+---
+
+## D27 — LiteLLM already tracks everything LLMCall manually recomputes; don't duplicate
+**Chose:** LLMCall (app/telemetry/llm_span.py) stays for APPLICATION-level
+semantic context only (linking a call to its question/retrieval result).
+Aggregate/cross-call cost and usage tracking (total spend, cache hit rate
+trends, per-key usage, real latency) should query LiteLLM's own
+/spend/logs endpoint directly, not be re-implemented in our own code.
+**Because:** Checked directly (not assumed) whether LiteLLM already
+tracks what we'd just manually wired. It does, more completely:
+/spend/logs returned the EXACT cached_tokens=16256 we found by hand,
+plus a full cost_breakdown (input_cost, output_cost, cache_read_cost
+computed separately and correctly), request_duration_ms (real latency,
+needed for Phase 5), model_id/model_group (which real provider served
+the call -- directly useful for auditing D14's fallback behavior), and
+user_api_key_alias (which virtual key made the call). All of this comes
+free, automatically, for every call through the gateway -- no per-service
+code duplication, unlike LLMCall which only covers calls made through
+generate.py specifically.
+**Cost:** LLMCall's cost_usd/actual_cost_usd/savings_usd properties are
+now acknowledged as duplicating gateway-computed values, kept for now
+because they're already built, tested, and useful for quick in-process
+access without a network round-trip -- but the SOURCE OF TRUTH for
+aggregate reporting should be LiteLLM's logs, not our own recomputation,
+to avoid the two silently drifting apart (e.g. if pricing changes and
+only one side gets updated). Follow-up: Phase 8's dashboards should pull
+from /spend/logs directly rather than aggregating our own LLMCall
+records.
