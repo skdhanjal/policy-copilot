@@ -471,3 +471,31 @@ deploy, not just in this throwaway test. Also worth checking whether any
 other path names we've used elsewhere collide with other GCP-reserved
 prefixes -- this was found by accident, not by systematically checking
 Google's reserved-path documentation in advance.
+
+---
+
+## D25 — Prefix-cache readiness verified with zero API cost, before touching Phase 4
+**Chose:** Confirmed three structural prerequisites for provider prompt
+caching (DESIGN.md Phase 4, item 1) hold true, entirely via free,
+local checks -- no API credits needed.
+**Because:** Rather than assume our prompt structure was cache-friendly
+or guess at what Phase 4's first item required, checked directly:
+  1. _SYSTEM_PROMPT is a fixed constant, always sent first in messages[].
+  2. Message ordering (system -> context -> question) already matches
+     the stable-to-variable shape prefix caching needs -- this fell out
+     naturally from how generate.py was originally written, not designed
+     for caching deliberately, but verified correct rather than assumed.
+  3. resolve()'s chunk ordering is DETERMINISTIC across repeated
+     identical calls (tested directly: two calls, byte-for-byte
+     identical chunk_id order). This mattered because non-deterministic
+     ordering would silently sabotage prefix matching even with correct
+     message structure -- SQL ORDER BY on tied scores has no guaranteed
+     stability without an explicit tiebreaker, though in practice
+     floating-point cosine similarity ties are vanishingly rare with our
+     embedding model.
+**Cost:** None of this proves the PROVIDER actually honors caching or
+gives us the token discount -- that requires a real API call with real
+usage-object inspection (prompt_tokens_details.cached_tokens on OpenAI's
+response), which is blocked on API credits. This entry closes the
+free/local half of Phase 4's first item; the paid/verification half
+remains open.
