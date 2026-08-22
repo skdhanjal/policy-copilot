@@ -584,3 +584,17 @@ blocker: there's no real safety classifier yet to speculate AGAINST --
 Phase 6 (guardrails) not built. Confirmed asyncio.TaskGroup available
 (3.12). Building the concurrency pattern against a placeholder classifier
 would validate nothing real. Defer until Phase 6 exists.
+
+---
+
+## D31 -- Phase 6 guardrails built and red-team tested
+Input: PII redaction, injection detection. Ingest: injection scan
+(zero false positives on real corpus). Output: PII leak check,
+grounding_failed flag. Red-team: 10 attacks (direct, encoding, legit),
+found and fixed a real regex bug via testing. 10/10 pass, 0 false
+positives on legitimate queries.
+KNOWN GAP, documented not hidden: encoding-based evasion (base64,
+leetspeak) NOT caught -- regex is plaintext-only. Acceptable for now
+given corpus/threat model; would need normalization pass (base64
+decode attempt, leetspeak normalization) to close. Only 10 attacks,
+not DESIGN.md's 50 -- real categories covered, volume not yet built out.
