@@ -163,7 +163,7 @@ async def check_citation_coverage(question: str, answer: GeneratedAnswer, result
     have caught the resolve()-scored-314.5-over-314.2 bug automatically."""
     from app.rag.retrieval import extract_citations
 
-    cited_in_question = extract_citations(question)
+    cited_in_question = extract_citations(question).section_paths
     if not cited_in_question:
         return {"passed": None, "note": "question contains no explicit citation"}
 
