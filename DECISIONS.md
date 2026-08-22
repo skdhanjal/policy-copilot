@@ -574,3 +574,13 @@ calls ~10-20ms. Not a bug -- but combined with ADR-1 (Cloud Run
 instances freeze/scale to zero), every cold start on real deploy pays
 this again. Phase 5/8 should consider: min-instances=1 to avoid scale-to-
 zero, or a startup warmup call in lifespan.
+
+---
+
+## D30 -- Speculative retrieval deferred again, now to Phase 6
+D9's three conditions for speculative retrieval (structured concurrency,
+separate pool, load test) are gradually achievable, but the deeper
+blocker: there's no real safety classifier yet to speculate AGAINST --
+Phase 6 (guardrails) not built. Confirmed asyncio.TaskGroup available
+(3.12). Building the concurrency pattern against a placeholder classifier
+would validate nothing real. Defer until Phase 6 exists.
