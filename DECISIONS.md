@@ -499,3 +499,27 @@ usage-object inspection (prompt_tokens_details.cached_tokens on OpenAI's
 response), which is blocked on API credits. This entry closes the
 free/local half of Phase 4's first item; the paid/verification half
 remains open.
+
+---
+
+## D26 — Provider prompt caching CONFIRMED working, ~90% cost reduction on repeated prefix
+**Chose:** Nothing new to build -- D25's structural prerequisites were
+sufficient. This entry records the first real, paid verification.
+**Because:** Direct test (scripts/verify_prompt_caching.py), identical
+diachronic question called twice through the real gateway/OpenAI path.
+Call 1: prompt_tokens=16296, cached_tokens=0 (nothing to cache yet).
+Call 2: SAME prompt, cached_tokens=16256 -- 99.75% of the prefix served
+from OpenAI's cache. At $0.08/1M cached vs $0.80/1M normal input (our
+own PRICE_TABLE, app/telemetry/llm_span.py), this is a ~90% cost
+reduction on the cached portion of a single repeated call.
+Also resolved a side question: completion_tokens_details.reasoning_tokens
+appearing non-trivial on a 3-token prompt was NOT evidence of accidental
+routing to a reasoning model -- confirmed via litellm_config.yaml that
+"fast" genuinely resolves to gpt-4o-mini. That field is present in
+OpenAI's response schema regardless; not a signal to over-interpret.
+**Cost / next step:** cached_tokens is currently invisible to our own
+telemetry -- LLMCall.cached_prompt_tokens (app/telemetry/llm_span.py,
+built in Phase 0 specifically for this) is not yet populated anywhere.
+generate.py needs to read resp.usage.prompt_tokens_details.cached_tokens
+and set it on the LLMCall span, or this real, measured saving remains
+invisible in our own cost dashboards despite genuinely happening.
