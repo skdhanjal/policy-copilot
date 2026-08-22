@@ -564,3 +564,13 @@ Conclusion: compression is not a viable Phase 4 win for this corpus.
 Real savings come from caching + reranking (done), not compression.
 Not pursuing model-based compression (LLMLingua) given low expected ROI
 and added complexity/risk for dense legal text specifically.
+
+---
+
+## D29 -- Embedding model cold start ~5s, real Cloud Run implication
+First call to resolve() in a fresh process pays ~5s loading
+sentence-transformers weights (_get_model() in embed.py). Subsequent
+calls ~10-20ms. Not a bug -- but combined with ADR-1 (Cloud Run
+instances freeze/scale to zero), every cold start on real deploy pays
+this again. Phase 5/8 should consider: min-instances=1 to avoid scale-to-
+zero, or a startup warmup call in lifespan.
