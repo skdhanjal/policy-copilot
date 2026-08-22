@@ -1,0 +1,421 @@
+{
+  "run_at": "2026-08-17T08:37:56.001676+00:00",
+  "items": [
+    {
+      "id": "point-in-time-001",
+      "category": "lookup",
+      "question": "what does 314.3 require",
+      "n_trials": 1,
+      "pass_rates": {
+        "faithfulness": 1.0,
+        "answer_relevancy": 1.0,
+        "citation_presence": 1.0
+      },
+      "trials": [
+        {
+          "trial": 1,
+          "answer_preview": "Section 314.3 requires the development, implementation, and maintenance of a comprehensive information security program [cite: 314.3(a)]. This program must be written in one or more readily accessible parts and include administrative, technical, and physical safeguards appropriate to the entity's si",
+          "intent": "point_in_time",
+          "checks": {
+            "faithfulness": {
+              "passed": true,
+              "score": 1.0,
+              "note": "CAUTION: faithfulness measures 'is this traceable to context', NOT correctness. Known to score 1.0 on our captured date-misattribution case. A pass here does not mean the answer is factually correct -- pair with date_binding for diachronic questions."
+            },
+            "answer_relevancy": {
+              "passed": "True",
+              "score": 0.8072407387229625,
+              "note": "Measures topical relevance to the question, not factual correctness or groundedness."
+            },
+            "context_quality": {
+              "passed": null,
+              "context_precision": null,
+              "context_recall": null,
+              "note": "skipped -- both context_precision and context_recall require expected_answer/ground_truth on this golden-set item, which is absent"
+            },
+            "citation_presence": {
+              "passed": true,
+              "is_abstention": false,
+              "cited_sections": [
+                "314.3(a)",
+                "314.3(a)",
+                "314.3(a)",
+                "314.3(b)(1)",
+                "314.3(b)(2)",
+                "314.3(b)(3)"
+              ],
+              "unverifiable_citations": [
+                "314.3(a)",
+                "314.3(a)",
+                "314.3(a)",
+                "314.3(b)(1)",
+                "314.3(b)(2)",
+                "314.3(b)(3)"
+              ],
+              "note": "Known unreliable even with this fix -- confirmed a real run with correct, substantive content and zero citation tags."
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "diachronic-notification-event-001",
+      "category": "diachronic",
+      "question": "has 314.2 changed since 2023",
+      "n_trials": 3,
+      "pass_rates": {
+        "faithfulness": 1.0,
+        "date_binding": 0.0,
+        "citation_presence": 0.6666666666666666
+      },
+      "trials": [
+        {
+          "trial": 1,
+          "answer_preview": "Yes, section 314.2 has changed since 2023.\n\nHere's a breakdown of the versions and the differences:\n\n**Version 1: Effective from 2023-11-13** [cite: 314.2 family=cfr-16-314 effective_from=2023-11-13 status=SUPERSEDED]\nThis version defined the following terms:\n*   **Authorized user** (a)\n*   **Consum",
+          "intent": "diachronic",
+          "checks": {
+            "faithfulness": {
+              "passed": true,
+              "score": 0.98989898989899,
+              "note": "CAUTION: faithfulness measures 'is this traceable to context', NOT correctness. Known to score 1.0 on our captured date-misattribution case. A pass here does not mean the answer is factually correct -- pair with date_binding for diachronic questions."
+            },
+            "date_binding": {
+              "passed": false,
+              "total_date_claims": 6,
+              "suspect_claims": [
+                {
+                  "date": "2023-11-13",
+                  "sentence": "Here's a breakdown of the versions and the differences:\n\n**Version 1: Effective from 2023-11-13** [cite: 314.2 family=cfr-16-314 effective_from=2023-1"
+                },
+                {
+                  "date": "2023-11-13",
+                  "sentence": "Here's a breakdown of the versions and the differences:\n\n**Version 1: Effective from 2023-11-13** [cite: 314.2 family=cfr-16-314 effective_from=2023-1"
+                },
+                {
+                  "date": "2024-05-13",
+                  "sentence": "Here's a breakdown of the versions and the differences:\n\n**Version 1: Effective from 2023-11-13** [cite: 314.2 family=cfr-16-314 effective_from=2023-1"
+                },
+                {
+                  "date": "2024-05-13",
+                  "sentence": "Here's a breakdown of the versions and the differences:\n\n**Version 1: Effective from 2023-11-13** [cite: 314.2 family=cfr-16-314 effective_from=2023-1"
+                },
+                {
+                  "date": "2024-05-13",
+                  "sentence": "Here's a breakdown of the versions and the differences:\n\n**Version 1: Effective from 2023-11-13** [cite: 314.2 family=cfr-16-314 effective_from=2023-1"
+                },
+                {
+                  "date": "2024-05-13",
+                  "sentence": "The version effective from 2024-05-13 is currently in force."
+                }
+              ],
+              "note": "Flags candidates; verify manually, especially for negation claims ('X was absent')."
+            },
+            "citation_presence": {
+              "passed": false,
+              "is_abstention": false,
+              "cited_sections": [],
+              "unverifiable_citations": [],
+              "note": "Known unreliable even with this fix -- confirmed a real run with correct, substantive content and zero citation tags."
+            }
+          }
+        },
+        {
+          "trial": 2,
+          "answer_preview": "Yes, \u00a7 314.2 has changed since 2023.\n\nHere's a breakdown of the versions and the differences:\n\n**Version 1: Effective from 2023-11-13**\nThis version defines the following terms:\n*   **Authorized user** [cite: 314.2(a)]\n*   **Consumer** [cite: 314.2(b)]\n*   **Customer** [cite: 314.2(c)]\n*   **Custome",
+          "intent": "diachronic",
+          "checks": {
+            "faithfulness": {
+              "passed": true,
+              "score": 0.9393939393939394,
+              "note": "CAUTION: faithfulness measures 'is this traceable to context', NOT correctness. Known to score 1.0 on our captured date-misattribution case. A pass here does not mean the answer is factually correct -- pair with date_binding for diachronic questions."
+            },
+            "date_binding": {
+              "passed": false,
+              "total_date_claims": 4,
+              "suspect_claims": [
+                {
+                  "date": "2023-11-13",
+                  "sentence": "Here's a breakdown of the versions and the differences:\n\n**Version 1: Effective from 2023-11-13**\nThis version defines the following terms:\n*   **Auth"
+                },
+                {
+                  "date": "2024-05-13",
+                  "sentence": "Here's a breakdown of the versions and the differences:\n\n**Version 1: Effective from 2023-11-13**\nThis version defines the following terms:\n*   **Auth"
+                },
+                {
+                  "date": "2024-05-13",
+                  "sentence": "Here's a breakdown of the versions and the differences:\n\n**Version 1: Effective from 2023-11-13**\nThis version defines the following terms:\n*   **Auth"
+                },
+                {
+                  "date": "2024-05-13",
+                  "sentence": "**Currently in force:**\nThe version effective from 2024-05-13 is currently in force."
+                }
+              ],
+              "note": "Flags candidates; verify manually, especially for negation claims ('X was absent')."
+            },
+            "citation_presence": {
+              "passed": true,
+              "is_abstention": false,
+              "cited_sections": [
+                "314.2(a)",
+                "314.2(b)",
+                "314.2(c)",
+                "314.2(d)",
+                "314.2(e)",
+                "314.2(f)",
+                "314.2(g)",
+                "314.2(h)",
+                "314.2(i)",
+                "314.2(j)",
+                "314.2(k)",
+                "314.2(l)",
+                "314.2(m)",
+                "314.2(n)",
+                "314.2(o)",
+                "314.2(p)",
+                "314.2(q)",
+                "314.2(r)",
+                "314.2(a)",
+                "314.2(b)",
+                "314.2(c)",
+                "314.2(d)",
+                "314.2(e)",
+                "314.2(f)",
+                "314.2(g)",
+                "314.2(h)",
+                "314.2(i)",
+                "314.2(j)",
+                "314.2(k)",
+                "314.2(l)",
+                "314.2(m)",
+                "314.2(n)",
+                "314.2(o)",
+                "314.2(p)",
+                "314.2(q)",
+                "314.2(r)",
+                "314.2(s)"
+              ],
+              "unverifiable_citations": [
+                "314.2(a)",
+                "314.2(b)",
+                "314.2(c)",
+                "314.2(d)",
+                "314.2(e)",
+                "314.2(f)",
+                "314.2(g)",
+                "314.2(h)",
+                "314.2(i)",
+                "314.2(j)",
+                "314.2(k)",
+                "314.2(l)",
+                "314.2(m)",
+                "314.2(n)",
+                "314.2(o)",
+                "314.2(p)",
+                "314.2(q)",
+                "314.2(r)",
+                "314.2(a)",
+                "314.2(b)",
+                "314.2(c)",
+                "314.2(d)",
+                "314.2(e)",
+                "314.2(f)",
+                "314.2(g)",
+                "314.2(h)",
+                "314.2(i)",
+                "314.2(j)",
+                "314.2(k)",
+                "314.2(l)",
+                "314.2(m)",
+                "314.2(n)",
+                "314.2(o)",
+                "314.2(p)",
+                "314.2(q)",
+                "314.2(r)",
+                "314.2(s)"
+              ],
+              "note": "Known unreliable even with this fix -- confirmed a real run with correct, substantive content and zero citation tags."
+            }
+          }
+        },
+        {
+          "trial": 3,
+          "answer_preview": "Yes, \u00a7 314.2 has changed since 2023. \n\nThe version effective from November 13, 2023, included a new definition for \"notification event\" in subsection (m), which states: \n\n- **Notification event** means acquisition of unencrypted customer information without the authorization of the individual to whi",
+          "intent": "diachronic",
+          "checks": {
+            "faithfulness": {
+              "passed": true,
+              "score": 0.9,
+              "note": "CAUTION: faithfulness measures 'is this traceable to context', NOT correctness. Known to score 1.0 on our captured date-misattribution case. A pass here does not mean the answer is factually correct -- pair with date_binding for diachronic questions."
+            },
+            "date_binding": {
+              "passed": false,
+              "total_date_claims": 3,
+              "suspect_claims": [
+                {
+                  "date": "2022-11-23",
+                  "sentence": "This definition was absent in the previous version effective from November 23, 2022."
+                }
+              ],
+              "note": "Flags candidates; verify manually, especially for negation claims ('X was absent')."
+            },
+            "citation_presence": {
+              "passed": true,
+              "is_abstention": false,
+              "cited_sections": [
+                "314.2"
+              ],
+              "unverifiable_citations": [],
+              "note": "Known unreliable even with this fix -- confirmed a real run with correct, substantive content and zero citation tags."
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "adversarial-citation-priority-001",
+      "category": "adversarial",
+      "question": "has 314.2 changed since 2023",
+      "n_trials": 1,
+      "pass_rates": {
+        "citation_coverage": 1.0
+      },
+      "trials": [
+        {
+          "trial": 1,
+          "answer_preview": "Yes, \u00a7 314.2 has changed since 2023.\n\nHere's a breakdown of the versions and the differences:\n\n**Version 1: Effective from 2023-11-13**\nThis version defines the following terms:\n*   **Authorized user** [cite: 314.2(a)]\n*   **Consumer** [cite: 314.2(b)]\n*   **Customer** [cite: 314.2(c)]\n*   **Custome",
+          "intent": "diachronic",
+          "checks": {
+            "citation_coverage": {
+              "passed": true,
+              "cited_in_question": [
+                "314.2"
+              ],
+              "found_in_retrieval": [
+                "314.2"
+              ],
+              "missing": []
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "unanswerable-pre-window-001",
+      "category": "unanswerable",
+      "question": "how has 12 CFR 1005.18's payroll card provisions changed in the last two years",
+      "n_trials": 1,
+      "pass_rates": {
+        "faithfulness": 1.0
+      },
+      "trials": [
+        {
+          "trial": 1,
+          "answer_preview": "The section 12 CFR 1005.18 regarding payroll card provisions has remained identical across all versions from 2020-07-21 to 2025-10-01. There have been no changes in the text related to payroll card accounts during this period. The relevant provisions, including statements regarding wage or salary pa",
+          "intent": "diachronic",
+          "checks": {
+            "faithfulness": {
+              "passed": true,
+              "score": 1.0,
+              "note": "CAUTION: faithfulness measures 'is this traceable to context', NOT correctness. Known to score 1.0 on our captured date-misattribution case. A pass here does not mean the answer is factually correct -- pair with date_binding for diachronic questions."
+            },
+            "abstention": {
+              "passed": null,
+              "hedged": true,
+              "note": "Informational only. Check against the item's expected_outcome manually."
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "diachronic-section-reorg-001",
+      "category": "diachronic",
+      "question": "did 17 CFR 275.211(h) get removed",
+      "n_trials": 1,
+      "pass_rates": {
+        "citation_presence": 1.0
+      },
+      "trials": [
+        {
+          "trial": 1,
+          "answer_preview": "The provided documents do not contain any information about 17 CFR 275.211(h). Therefore, I cannot answer whether it was removed.",
+          "intent": "diachronic",
+          "checks": {
+            "abstention": {
+              "passed": null,
+              "hedged": true,
+              "note": "Informational only. Check against the item's expected_outcome manually."
+            },
+            "citation_presence": {
+              "passed": true,
+              "is_abstention": true,
+              "cited_sections": [],
+              "unverifiable_citations": [],
+              "note": "Known unreliable even with this fix -- confirmed a real run with correct, substantive content and zero citation tags."
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "hallucination-fabricated-comparison-001",
+      "category": "diachronic",
+      "question": "how has 12 CFR 1005.18's payroll card provisions changed in the last two years",
+      "n_trials": 1,
+      "pass_rates": {
+        "faithfulness": 1.0,
+        "date_binding": 1.0
+      },
+      "trials": [
+        {
+          "trial": 1,
+          "answer_preview": "The section 1005.18 regarding payroll card provisions has remained identical across all versions from 2020-07-21 to 2025-10-01. There have been no changes in the text related to payroll cards during this period. The relevant provisions for payroll cards are included in paragraph (b)(2)(xiv), which s",
+          "intent": "diachronic",
+          "checks": {
+            "faithfulness": {
+              "passed": true,
+              "score": 0.875,
+              "note": "CAUTION: faithfulness measures 'is this traceable to context', NOT correctness. Known to score 1.0 on our captured date-misattribution case. A pass here does not mean the answer is factually correct -- pair with date_binding for diachronic questions."
+            },
+            "date_binding": {
+              "passed": true,
+              "total_date_claims": 2,
+              "suspect_claims": [],
+              "note": "Flags candidates; verify manually, especially for negation claims ('X was absent')."
+            },
+            "abstention": {
+              "passed": null,
+              "hedged": true,
+              "note": "Informational only. Check against the item's expected_outcome manually."
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "citation-format-unreliable-001",
+      "category": "diachronic",
+      "question": "has 314.2 changed since 2023",
+      "n_trials": 1,
+      "pass_rates": {
+        "citation_presence": 0.0
+      },
+      "trials": [
+        {
+          "trial": 1,
+          "answer_preview": "Yes, section 314.2 has changed since 2023.\n\nHere's a breakdown of the versions and the differences:\n\n**Version 1: Effective from 2023-11-13** [cite: 314.2 family=cfr-16-314 effective_from=2023-11-13 status=SUPERSEDED]\nThis version defined the following terms:\n*   **Authorized user** (a)\n*   **Consum",
+          "intent": "diachronic",
+          "checks": {
+            "citation_presence": {
+              "passed": false,
+              "is_abstention": false,
+              "cited_sections": [],
+              "unverifiable_citations": [],
+              "note": "Known unreliable even with this fix -- confirmed a real run with correct, substantive content and zero citation tags."
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

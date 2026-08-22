@@ -79,7 +79,7 @@ class RetrievalResult:
     # multi-family query gets multi-family history, not just the top hit's.
     lineages: dict[tuple[str, str], list[VersionedChunk]]    
     
-def extract_citations(question: str) -> list[str]:
+def extract_citations(question: str) -> ExtractedCitations:
     """Explicit numeric citations ('314.2', '275.204-2') AND common
     regulation nicknames ('Reg E', 'the Safeguards Rule') both count as
     explicit signal -- both bypass semantic search the same way, routed
