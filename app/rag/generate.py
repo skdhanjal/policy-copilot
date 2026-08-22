@@ -22,6 +22,8 @@ from openai import AsyncOpenAI, RateLimitError
 from app.core.config import get_settings
 from app.rag.retrieval import RetrievalResult
 from app.telemetry.llm_span import LLMCall
+from redis.asyncio import Redis
+from app.rag.cache import get_cached_answer, set_cached_answer
 
 _OPEN, _CLOSE = "<<<DOC", "DOC>>>"
 
@@ -115,23 +117,35 @@ def _render_context(result: RetrievalResult) -> str:
 _CITE_PATTERN = re.compile(r"\[cite:\s*([\w.()\-]+)\]")
 
 
-async def generate(result: RetrievalResult, question: str) -> GeneratedAnswer:
+async def generate(result: RetrievalResult, question: str,  redis: Redis | None = None) -> GeneratedAnswer:
+    """redis is optional and defaults to None -- every existing call site
+    (7 as of this writing: run_harness.py, ci_gate.py via run_item,
+    several scripts/) continues to work unmodified, with caching simply
+    skipped. Cache key (app/rag/cache.py) is built from RETRIEVED chunk/
+    version IDs, not question text alone -- see that module's docstring
+    for why keying on question text alone would silently serve stale
+    answers after a corpus update.
+    """
     settings = get_settings()
+    if redis is not None:
+        cached = await get_cached_answer(redis, question, result)
+        if cached is not None:
+            return GeneratedAnswer(
+                text=cached["text"],
+                cited_sections=cached["cited_sections"],
+                unverifiable_citations=cached["unverifiable_citations"],
+                llm_call=None,  # no real call made -- this WAS the point
+            )
     # Points at the LiteLLM gateway, not OpenAI directly. Same SDK, because
     # LiteLLM speaks the OpenAI API format regardless of which real provider
     # it routes to underneath -- this is ADR-4 (DESIGN.md): application code
-    # never names a vendor, only an alias ("fast").
-    #
-    # max_retries=0 is deliberate (DECISIONS.md D15). The SDK's default
-    # retry behavior silently absorbed a real 429 rate-limit rejection
-    # during gateway testing -- the request "succeeded" from the caller's
-    # view, just slower, with no signal a limit was ever hit. Retrying
-    # invisibly is the SDK's choice, not ours to inherit by default.
+    # never names a vendor, only an alias ("fast").       
     client = AsyncOpenAI(
         api_key=settings.gateway_app_key,
         base_url=f"{settings.gateway_base_url}/v1",
         max_retries=0,
     )
+    
     context = _render_context(result)
     if not context.strip():
         return GeneratedAnswer(
@@ -176,5 +190,16 @@ async def generate(result: RetrievalResult, question: str) -> GeneratedAnswer:
     known_sections = {c.section_path for c in result.resolved if c.text}
     known_sections |= {sec for (_, sec) in result.lineages.keys()}
     unverifiable = [c for c in cited if c not in known_sections]
+    
+    if redis is not None:
+        # Cache the RESULT, not the LLMCall -- llm_call has this specific
+        # request's token counts, which are meaningless attached to a
+        # future cache hit that made no real call. Only text/citations are
+        # genuinely reusable.
+        await set_cached_answer(redis, question, result, {
+            "text": text,
+            "cited_sections": cited,
+            "unverifiable_citations": unverifiable,
+        })
 
     return GeneratedAnswer(text=text, cited_sections=cited, unverifiable_citations=unverifiable, llm_call=llm_call)
