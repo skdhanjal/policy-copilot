@@ -46,8 +46,10 @@ _REGULATION_NICKNAMES = {
     "safeguards rule": "314",
     "16 cfr 314": "314",
     "investment advisers act": "275",
-    "17 cfr 275": "275",
+    "investment adviser": "275",
+    "17 cfr 275": "275"
 }
+
 @dataclass(slots=True)
 class ResolvedChunk:
     chunk_id: str

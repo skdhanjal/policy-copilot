@@ -46,6 +46,10 @@ in an earlier version. If a defined term first appears in a later version,
 state explicitly that it was introduced then and was absent before -- do not
 imply continuity you cannot verify from the text shown.
 
+If documents from DIFFERENT regulations are shown, address each relevant
+one -- do not abstain just because they cover different subject areas.
+Synthesize across them; note explicitly if they don't overlap.
+
 If the documents do not contain the answer, say so plainly. Do not guess or
 generalise from adjacent sections.
 
