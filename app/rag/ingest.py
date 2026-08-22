@@ -22,6 +22,7 @@ from app.core.config import get_settings
 from app.rag.ecfr_client import BASE, fetch_snapshot_xml
 from app.rag.ecfr_parse import content_hash, parse_sections, split_section
 from app.rag.embed import embed_texts
+from app.guardrails.injection import detect_injection
 
 MAX_DATES_PER_FAMILY = 5
 
@@ -67,6 +68,11 @@ async def ingest_family(
         all_chunks = []
         for section in sections:
             all_chunks.extend(split_section(section))
+        
+        flagged = [c.section_path for c in all_chunks if detect_injection(c.text)]
+        
+        if flagged:
+            print(f"WARNING: injection pattern matched in ingest, review: {flagged}", file=sys.stderr)    
 
         snapshot_hash = hashlib.sha256(
             "\x00".join(c.text for c in all_chunks).encode()
