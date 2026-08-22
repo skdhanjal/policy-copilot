@@ -7,12 +7,12 @@ this module."""
 import re
 
 _INJECTION_PATTERNS = re.compile(
-    r"\b(ignore (previous|prior|all|the above) instructions?|"
-    r"disregard (previous|prior|all) instructions?|"
-    r"you are now|forget (your|all) (previous )?instructions?|"
-    r"system prompt|reveal your (instructions|prompt)|"
-    r"act as if|pretend (you are|to be)|"
-    r"new instructions?:)\b",
+    r"\bignore (previous|prior|all|the above) instructions?\b|"
+    r"\bdisregard (previous|prior|all) instructions?\b|"
+    r"\byou are now\b|\bforget (your|all) (previous )?instructions?\b|"
+    r"\bsystem prompt\b|\breveal your (instructions|prompt)\b|"
+    r"\bact as if\b|\bpretend (you are|to be)\b|"
+    r"\bnew instructions?:",
     re.IGNORECASE,
 )
 
