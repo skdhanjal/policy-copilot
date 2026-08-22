@@ -24,6 +24,7 @@ import asyncpg
 from app.rag.embed import embed_texts
 from app.rag.intent import Intent, classify
 from app.guardrails.pii import redact_pii
+from app.guardrails.injection import detect_injection
 
 RESOLVE_K = 8
 
@@ -77,6 +78,9 @@ class RetrievalResult:
     resolved: list[ResolvedChunk]
     lineages: dict[tuple[str, str], list[VersionedChunk]]
     pii_found: list[str] = field(default_factory=list)
+    
+class InjectionDetected(Exception):
+    pass    
     
 def extract_citations(question: str) -> ExtractedCitations:
     """Explicit numeric citations ('314.2', '275.204-2') AND common
@@ -255,6 +259,9 @@ async def retrieve(pool: asyncpg.Pool, question: str, k: int = RESOLVE_K) -> Ret
     expand_lineage supplies the real content for that path.
     """
     question, pii_found = redact_pii(question)
+    if detect_injection(question):
+        raise InjectionDetected(question)
+    
     result = classify(question)
     citations = extract_citations(question)
     has_numeric_citation = bool(citations.section_paths)
