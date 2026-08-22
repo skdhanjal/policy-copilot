@@ -207,3 +207,43 @@ async def generate(result: RetrievalResult, question: str,  redis: Redis | None 
         })
 
     return GeneratedAnswer(text=text, cited_sections=cited, unverifiable_citations=unverifiable, llm_call=llm_call)
+
+
+async def generate_stream(result: RetrievalResult, question: str):
+    """Yields text as sentences complete, not full tokens. Minimal first
+    pass of ADR-10 -- sentence buffering only, no tier-1/tier-2 validation
+    yet (needs API/SSE layer, not built). No caching, no citation
+    verification -- opt-in, separate from generate()."""
+    settings = get_settings()
+    client = AsyncOpenAI(
+        api_key=settings.gateway_app_key,
+        base_url=f"{settings.gateway_base_url}/v1",
+        max_retries=0,
+    )
+    context = _render_context(result)
+    if not context.strip():
+        yield "No relevant documents were found for this question."
+        return
+
+    stream = await client.chat.completions.create(
+        model="fast",
+        messages=[
+            {"role": "system", "content": _SYSTEM_PROMPT},
+            {"role": "user", "content": f"{context}\n\nQuestion: {question}"},
+        ],
+        temperature=0,
+        stream=True,
+    )
+
+    buf = ""
+    async for chunk in stream:
+        delta = chunk.choices[0].delta.content or ""
+        buf += delta
+        while True:
+            m = re.search(r"[.!?]\s", buf)
+            if not m:
+                break
+            yield buf[:m.end()]
+            buf = buf[m.end():]
+    if buf:
+        yield buf
