@@ -16,7 +16,7 @@ first place that boundary actually does its job, not just documents intent.
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from openai import AsyncOpenAI, RateLimitError
 from app.core.config import get_settings
@@ -24,6 +24,7 @@ from app.rag.retrieval import RetrievalResult
 from app.telemetry.llm_span import LLMCall
 from redis.asyncio import Redis
 from app.rag.cache import get_cached_answer, set_cached_answer
+from app.guardrails.pii import check_output_pii_leak
 
 _OPEN, _CLOSE = "<<<DOC", "DOC>>>"
 
@@ -75,6 +76,7 @@ class GeneratedAnswer:
     # None on early-return paths (no context found, rate-limited) since no
     # real API call was made to measure.
     llm_call: LLMCall | None = None
+    output_pii_leak: list[str] = field(default_factory=list)
 
 
 def _render_context(result: RetrievalResult) -> str:
@@ -176,6 +178,8 @@ async def generate(result: RetrievalResult, question: str,  redis: Redis | None 
         )
 
     text = response.choices[0].message.content or ""
+    
+    output_pii_leak = check_output_pii_leak(text)
 
     usage = response.usage
     cached = 0
@@ -206,7 +210,13 @@ async def generate(result: RetrievalResult, question: str,  redis: Redis | None 
             "unverifiable_citations": unverifiable,
         })
 
-    return GeneratedAnswer(text=text, cited_sections=cited, unverifiable_citations=unverifiable, llm_call=llm_call)
+    return GeneratedAnswer(
+        text=text, 
+        cited_sections=cited, 
+        unverifiable_citations=unverifiable, 
+        llm_call=llm_call, 
+        output_pii_leak=output_pii_leak
+    )
 
 
 async def generate_stream(result: RetrievalResult, question: str):

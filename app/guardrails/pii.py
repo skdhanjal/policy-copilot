@@ -21,3 +21,11 @@ def redact_pii(text: str) -> tuple[str, list[str]]:
             found.append(label)
             text = pattern.sub(f"[REDACTED_{label.upper()}]", text)
     return text, found
+
+
+def check_output_pii_leak(text: str) -> list[str]:
+    """Same detection as input, applied to OUTPUT -- catches the model
+    echoing back PII from context (e.g. if a chunk somehow contained real
+    PII, or the model hallucinates a plausible-looking SSN/email)."""
+    _, found = redact_pii(text)
+    return found
