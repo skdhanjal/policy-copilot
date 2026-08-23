@@ -609,3 +609,11 @@ the 2nd retry. Confirms earlier finding (1/3 success with prompt-only
 fix) -- this is a real model bias, not something retry-with-instruction
 reliably corrects. D20 remains open. Real fix path is still D12-style
 deterministic fact injection, not available for every claim type.
+
+---
+
+## D33 -- Agent cost cap, first value was too low, corrected via measurement
+Initial MAX_COST_USD=0.01 was arbitrary, cut the loop after 1 call --
+real diachronic generate() call costs ~$0.02 due to large context (16k
+token prefix, per D26). Corrected to 0.05 (~2-3x real single-call cost)
+based on actual measurement, not guess.
