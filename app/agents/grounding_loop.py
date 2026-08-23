@@ -2,6 +2,7 @@
 retry generate on failure, up to MAX_RETRIES. Targets the still-open
 diachronic-notification-event-001 case (D20)."""
 
+import time
 from typing import TypedDict
 import asyncpg
 from langgraph.graph import StateGraph, END
@@ -12,6 +13,7 @@ from app.rag.eval_metrics import check_date_bindings
 
 MAX_RETRIES = 2
 MAX_COST_USD = 0.05  # ~2-3x a single diachronic call's real cost (~$0.02)
+MAX_WALL_CLOCK_S = 30.0
 
 class AgentState(TypedDict):
     pool: asyncpg.Pool
@@ -21,11 +23,12 @@ class AgentState(TypedDict):
     retries: int
     grounded: bool
     total_cost: float
+    start_time: float
 
 
 async def retrieve_node(state: AgentState) -> dict:
     result = await retrieve(state["pool"], state["question"])
-    return {"result": result}
+    return {"result": result, "start_time": time.monotonic()}
 
 
 async def generate_node(state: AgentState) -> dict:
@@ -55,6 +58,10 @@ def route_after_check(state: AgentState) -> str:
         return END
     
     if state.get("total_cost", 0.0) >= MAX_COST_USD:
+        return END
+    
+    elapsed = time.monotonic() - state.get("start_time", time.monotonic())
+    if elapsed >= MAX_WALL_CLOCK_S:
         return END
     
     return "generate"
