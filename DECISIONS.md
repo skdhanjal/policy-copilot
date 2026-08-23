@@ -597,3 +597,15 @@ KNOWN GAP, documented not hidden: encoding-based evasion (base64,
 leetspeak) NOT caught -- regex is plaintext-only. Acceptable for now
 given corpus/threat model; would need normalization pass (base64
 decode attempt, leetspeak normalization) to close. Expanded to 49 attacks (direct/encoding/indirect/legitimate). Found and fixed 2 more real regex gaps during expansion (disregard qualifier variants, gap tolerance for interposed words). Final: 49/49 pass, 0 false positives across 25 legitimate-query variants.
+
+---
+
+## D32 -- Agent retry loop built, confirms retry alone insufficient for D20
+LangGraph state machine: retrieve -> generate -> check_date_binding ->
+retry (max 2) -> end. Mechanism verified correct (retries, checks, stops
+correctly). Does NOT reliably fix diachronic-notification-event-001:
+3 runs, 2 failed after exhausting both retries, 1 succeeded but only on
+the 2nd retry. Confirms earlier finding (1/3 success with prompt-only
+fix) -- this is a real model bias, not something retry-with-instruction
+reliably corrects. D20 remains open. Real fix path is still D12-style
+deterministic fact injection, not available for every claim type.
