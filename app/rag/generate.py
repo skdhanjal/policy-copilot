@@ -198,7 +198,11 @@ async def generate(result: RetrievalResult, question: str,  redis: Redis | None 
     cited = _CITE_PATTERN.findall(text)
     known_sections = {c.section_path for c in result.resolved if c.text}
     known_sections |= {sec for (_, sec) in result.lineages.keys()}
-    unverifiable = [c for c in cited if c not in known_sections]
+    # unverifiable = [c for c in cited if c not in known_sections]
+    unverifiable = [
+        c for c in cited
+        if not any(c == s or c.startswith(s) for s in known_sections)
+    ]
     
     if redis is not None:
         # Cache the RESULT, not the LLMCall -- llm_call has this specific
