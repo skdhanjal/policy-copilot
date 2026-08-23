@@ -627,3 +627,11 @@ msgpack-serializable. Checked LangGraph docs (not guessed) before fixing
 (older/JS-style). Pool now injected via runtime.context, excluded from
 checkpointed state entirely. thread_id remains in config (different
 concern -- checkpoint session identity, not dependency injection).
+
+---
+
+## D35 -- Checkpoint resumability verified across separate processes
+Simulated crash (stopped after 1 step in one process), resumed in a
+completely separate process with same thread_id, no shared memory.
+Correctly resumed from checkpoint rather than restarting. Real proof of
+durability, not just "the code runs".
