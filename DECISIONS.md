@@ -675,3 +675,37 @@ fixable by installing additional packages (confirmed: installing
 langchain-google-vertexai did not help, since ragas's import statement
 itself points at the old path). No single-environment fix exists.
 Confirms D38's two-venv approach is correct, not a workaround.
+
+---
+
+## D38 -- ragas/langgraph: genuinely separate venvs required, uv confirmed the real conflict
+Extensive investigation (D37 was incomplete). Root cause fully isolated:
+ragas (ANY version, including latest) imports
+langchain_community.chat_models.vertexai.ChatVertexAI, a module removed
+from recent langchain-community. Only works with langchain-community==
+0.3.27 (old). langgraph requires langchain-core>=1.4.7, which forces
+langchain-community>=0.3.66+ range -- incompatible with 0.3.27.
+uv's resolver (stricter than pip) correctly REFUSED to install both in
+one environment, unlike pip which silently allowed a broken combo with
+only a warning. This is the correct behavior -- surfaced a real bug we'd
+been masking.
+FINAL FIX: two separate venvs. .venv (uv-managed, pyproject.toml) = main
+app + langgraph, no ragas. .venv-eval (scripts/setup_eval_env.sh) =
+ragas==0.2.10 + langchain-community==0.3.27, isolated. Eval scripts run
+via `.venv-eval/bin/python3 -m evals.runners...`, not the main venv.
+Neither langgraph nor ragas is imported by the deployed service
+(app/api, app/rag) directly -- only app/agents (langgraph, if wired to
+production later) and evals/ (ragas, dev-only). Docker image should use
+main .venv deps only.
+
+---
+
+## D40 -- Real Docker image builds and runs correctly, full loop closed
+After resolving D37-D39's dependency conflicts via uv + 2-venv split,
+built the actual production Dockerfile using requirements-docker.txt
+(stripped uv-export output -- no -e ., no header comments, hash-pinned).
+740s build (PyTorch/sentence-transformers dominate). Verified: container
+runs, /health-live returns 200, /query returns correct grounded answer
+against real Postgres/Redis/LiteLLM (via host.docker.internal). This
+closes D22's original gap for real -- not just a scaffold test this
+time, the actual production service.
