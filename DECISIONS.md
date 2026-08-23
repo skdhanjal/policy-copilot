@@ -709,3 +709,23 @@ runs, /health-live returns 200, /query returns correct grounded answer
 against real Postgres/Redis/LiteLLM (via host.docker.internal). This
 closes D22's original gap for real -- not just a scaffold test this
 time, the actual production service.
+
+---
+
+## D43 -- LiteLLM Cloud Run deploy: 5 real issues found and fixed
+1. VPC connector wrongly attached to LiteLLM (it never talks to
+   Redis/Postgres, only public LLM APIs) -- removed after verifying
+   litellm_config.yaml has no such reference.
+2. Secret Manager access requires explicit IAM grant per secret --
+   creating a secret does not grant any service permission to read it.
+3. Cloud Run needs the config file baked into a custom image (no local
+   file mounting like Docker Compose) -- built litellm.Dockerfile.
+4. command vs args: Terraform's `command` overrides the container
+   entrypoint; flags belong in `args`. Using `command` for flags broke
+   startup ("no such file --config").
+5. Default 512Mi memory insufficient for LiteLLM; needed 2Gi. Default
+   startup probe timeout too aggressive; added explicit generous
+   startup_probe (10s delay, 5s period, 10 failures = 50s grace).
+Verified end-to-end: real image, real Secret Manager values, real
+health check, temporarily made public to confirm, then locked back to
+private (403 confirmed after ~60s IAM propagation delay).
