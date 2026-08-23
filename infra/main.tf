@@ -17,9 +17,14 @@ resource "google_sql_database_instance" "main" {
   database_version = "POSTGRES_16"
   region           = var.region
   deletion_protection = false
+  depends_on = [google_service_networking_connection.private_vpc_connection]
 
   settings {
     tier = "db-f1-micro"
+    ip_configuration {
+      ipv4_enabled    = false
+      private_network = "projects/${var.project_id}/global/networks/default"
+    }
   }
 }
 
@@ -46,4 +51,56 @@ resource "null_resource" "enable_pgvector" {
       kill $PROXY_PID
     EOT
   }
+}
+
+resource "google_vpc_access_connector" "connector" {
+  name          = "policy-copilot-conn"
+  region        = var.region
+  ip_cidr_range = "10.8.0.0/28"
+  network       = "default"
+  depends_on = [google_project_service.compute, google_project_service.vpcaccess]
+}
+
+resource "google_redis_instance" "cache" {
+  name           = "policy-copilot-redis"
+  region         = var.region
+  tier           = "BASIC"
+  memory_size_gb = 1
+  authorized_network = "default"
+  depends_on = [google_project_service.redis, google_project_service.compute]
+}
+
+resource "google_compute_global_address" "private_ip_range" {
+  name          = "policy-copilot-private-ip"
+  purpose       = "VPC_PEERING"
+  address_type  = "INTERNAL"
+  prefix_length = 16
+  network       = "projects/${var.project_id}/global/networks/default"
+  depends_on = [google_project_service.compute, google_project_service.servicenetworking]
+}
+
+resource "google_service_networking_connection" "private_vpc_connection" {
+  network                 = "projects/${var.project_id}/global/networks/default"
+  service                 = "servicenetworking.googleapis.com"
+  reserved_peering_ranges = [google_compute_global_address.private_ip_range.name]
+}
+
+resource "google_project_service" "compute" {
+  service            = "compute.googleapis.com"
+  disable_on_destroy = false
+}
+
+resource "google_project_service" "servicenetworking" {
+  service            = "servicenetworking.googleapis.com"
+  disable_on_destroy = false
+}
+
+resource "google_project_service" "vpcaccess" {
+  service            = "vpcaccess.googleapis.com"
+  disable_on_destroy = false
+}
+
+resource "google_project_service" "redis" {
+  service            = "redis.googleapis.com"
+  disable_on_destroy = false
 }
