@@ -635,3 +635,14 @@ Simulated crash (stopped after 1 step in one process), resumed in a
 completely separate process with same thread_id, no shared memory.
 Correctly resumed from checkpoint rather than restarting. Real proof of
 durability, not just "the code runs".
+
+---
+
+## D36 -- /query endpoint built, exposed a real grounding-check bug
+First real HTTP request through the full system surfaced a bug never
+caught in direct-function testing: unverifiable_citations used exact
+string match, but model cites sub-clause level (314.3(a)) while
+retrieval only tracks section level (314.3) -- every valid citation was
+flagged as unverifiable, grounding_failed=true on a known-correct case.
+Fixed with prefix match. Confirms value of testing through the real
+API surface, not just internal function calls.
