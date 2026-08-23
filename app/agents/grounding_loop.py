@@ -2,10 +2,12 @@
 retry generate on failure, up to MAX_RETRIES. Targets the still-open
 diachronic-notification-event-001 case (D20)."""
 
+from dataclasses import dataclass
 import time
 from typing import TypedDict
 import asyncpg
 from langgraph.graph import StateGraph, END
+from langgraph.runtime import Runtime
 
 from app.rag.retrieval import retrieve, RetrievalResult
 from app.rag.generate import generate, GeneratedAnswer
@@ -25,9 +27,12 @@ class AgentState(TypedDict):
     total_cost: float
     start_time: float
 
-
-async def retrieve_node(state: AgentState) -> dict:
-    result = await retrieve(state["pool"], state["question"])
+@dataclass
+class AgentContext:
+    pool: asyncpg.Pool
+    
+async def retrieve_node(state: AgentState, runtime: Runtime[AgentContext]) -> dict:
+    result = await retrieve(runtime.context.pool, state["question"])
     return {"result": result, "start_time": time.monotonic()}
 
 
@@ -67,8 +72,8 @@ def route_after_check(state: AgentState) -> str:
     return "generate"
 
 
-def build_graph():
-    g = StateGraph(AgentState)
+def build_graph(checkpointer=None):
+    g = StateGraph(AgentState, context_schema=AgentContext)
     g.add_node("retrieve", retrieve_node)
     g.add_node("generate", generate_node)
     g.add_node("check", check_node)
@@ -78,4 +83,4 @@ def build_graph():
     g.add_edge("generate", "check")
     g.add_conditional_edges("check", route_after_check, {"generate": "generate", END: END})
     
-    return g.compile()
+    return g.compile(checkpointer=checkpointer)
