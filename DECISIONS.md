@@ -617,3 +617,13 @@ Initial MAX_COST_USD=0.01 was arbitrary, cut the loop after 1 call --
 real diachronic generate() call costs ~$0.02 due to large context (16k
 token prefix, per D26). Corrected to 0.05 (~2-3x real single-call cost)
 based on actual measurement, not guess.
+
+---
+
+## D34 -- Checkpointing crashed on non-serializable pool in state; fixed via context_schema
+Adding Postgres checkpointing crashed: asyncpg.Pool in AgentState isn't
+msgpack-serializable. Checked LangGraph docs (not guessed) before fixing
+-- correct pattern is context_schema + Runtime[T], not config["configurable"]
+(older/JS-style). Pool now injected via runtime.context, excluded from
+checkpointed state entirely. thread_id remains in config (different
+concern -- checkpoint session identity, not dependency injection).
