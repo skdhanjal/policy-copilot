@@ -1,0 +1,33 @@
+steps:
+  # 1. Build the real app image (not the throwaway test one)
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['build', '-t', 'us-central1-docker.pkg.dev/$PROJECT_ID/policy-copilot/api:$SHORT_SHA', '.']
+
+  # 2. Run unit tests -- fail fast before any deploy work
+  - name: 'python:3.12-slim'
+    entrypoint: 'bash'
+    args: ['-c', 'pip install -r requirements.txt --break-system-packages -q && python -m pytest tests/ -x']
+
+  # 3. Run the CI gate (evals/runners/ci_gate.py) -- fail build on blocking regression
+  - name: 'python:3.12-slim'
+    entrypoint: 'bash'
+    args: ['-c', 'pip install -r requirements.txt --break-system-packages -q && python -m evals.runners.ci_gate']
+
+  # 4. Push image only if tests + gate passed
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'us-central1-docker.pkg.dev/$PROJECT_ID/policy-copilot/api:$SHORT_SHA']
+
+  # 5. Deploy to Cloud Run with a CANARY tag, not 100% traffic yet
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: 'gcloud'
+    args:
+      - 'run'
+      - 'deploy'
+      - 'policy-copilot-api'
+      - '--image=us-central1-docker.pkg.dev/$PROJECT_ID/policy-copilot/api:$SHORT_SHA'
+      - '--region=us-central1'
+      - '--no-traffic'
+      - '--tag=canary'
+
+images:
+  - 'us-central1-docker.pkg.dev/$PROJECT_ID/policy-copilot/api:$SHORT_SHA'

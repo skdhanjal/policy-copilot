@@ -9,6 +9,9 @@ from redis.asyncio import Redis
 from app.core.config import get_settings
 
 from fastapi import FastAPI, Response, status
+from pydantic import BaseModel
+from app.rag.retrieval import retrieve, InjectionDetected
+from app.rag.generate import generate
 
 # How often the heartbeat wakes up.
 HEARTBEAT_INTERVAL_S = 1.0
@@ -68,6 +71,34 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Policy Copilot", lifespan=lifespan)
 
+class QueryRequest(BaseModel):
+    question: str
+
+
+@app.post("/query")
+async def query(req: QueryRequest, response: Response) -> dict:
+    try:
+        result = await retrieve(app.state.pg, req.question)
+    except InjectionDetected:
+        response.status_code = status.HTTP_400_BAD_REQUEST
+        return {"error": "request blocked", "reason": "injection_detected"}
+
+    answer = await generate(result, req.question, redis=app.state.redis)
+
+    if answer.rate_limited:
+        response.status_code = status.HTTP_429_TOO_MANY_REQUESTS
+
+    return {
+        "text": answer.text,
+        "cited_sections": answer.cited_sections,
+        "unverifiable_citations": answer.unverifiable_citations,
+        "grounding_failed": answer.grounding_failed,
+        "output_pii_leak": answer.output_pii_leak,
+        "rate_limited": answer.rate_limited,
+        "pii_found": result.pii_found,
+        "intent": result.intent.value,
+    }
+
 
 @app.get("/health-live")
 async def health_live(response: Response) -> dict:
@@ -126,14 +157,3 @@ async def readyz(response: Response) -> dict:
         "dependencies": {"postgres": pg_status, "redis": redis_status},
         "pool": {"size": size, "idle": idle, "max": max_size, "saturation": round(saturation, 2)},
     }
-
-@app.get("/debug/block")
-async def debug_block(seconds: float = 8.0) -> dict:
-    """DELETE BEFORE DEPLOYING. Deliberately blocks the event loop.
-
-    time.sleep() is synchronous -- it blocks the OS thread. Since the event
-    loop IS that thread, everything stops. This is exactly what a runaway
-    regex, a large JSON parse, or a `requests.get()` call does by accident.
-    """
-    time.sleep(seconds)
-    return {"blocked_for_s": seconds}
