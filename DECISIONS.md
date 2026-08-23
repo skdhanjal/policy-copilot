@@ -646,3 +646,20 @@ retrieval only tracks section level (314.3) -- every valid citation was
 flagged as unverifiable, grounding_failed=true on a known-correct case.
 Fixed with prefix match. Confirms value of testing through the real
 API surface, not just internal function calls.
+
+---
+
+## D37 -- ragas/langgraph dependency conflict, unresolvable by pinning, documented not fixed
+ragas 0.2.10's langchain stack wants langchain-core<1.0.0; langgraph
+1.2.11 wants >=1.4.7. No compatible version satisfies both. Tested
+extensively: fresh single-shot install always fails resolution. Working
+state only achieved via specific install ORDER (langgraph/its deps
+installed/upgraded LAST, forcing langchain-core to 1.6.0) -- pip then
+allows it with a non-fatal warning re: ragas's declared requirements.
+CONFIRMED both actually import and function correctly despite the
+warning (langgraph full pipeline test, ragas faithfulness call, both
+work). requirements.txt install order matters: base deps first, then
+langgraph/langgraph-checkpoint-postgres LAST via separate pip install
+call, not single -r file. Documented as accepted risk, not fixed --
+real fix would mean pinning to compatible major versions of both
+libraries, which don't currently exist together.
