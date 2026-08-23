@@ -765,3 +765,28 @@ manual steps are still required before the system is usable:
 NOT yet automated as Terraform null_resources: items 1, 3, 4 above.
 Candidate future improvement: wrap these in null_resource/local-exec
 like we did for pgvector enablement, so a single apply truly suffices.
+
+---
+
+## D45 -- terraform destroy stuck on orphaned Memorystore peering; manual console deletion needed
+`terraform destroy` failed repeatedly with
+FLOW_SN_DC_RESOURCE_PREVENTING_DELETE_CONNECTION even after confirming
+(via gcloud sql instances list / gcloud redis instances list) that both
+the SQL instance and Redis instance were already deleted. Root cause,
+found via GCP Console (VPC Network -> VPC connectivity -> VPC network
+peering): Memorystore automatically creates its OWN separate peering
+connection (redis-peer-<id>, in a hidden Google-managed project) at
+provision time, distinct from the servicenetworking-googleapis-com
+peering Terraform creates/tracks. Terraform has no visibility into or
+control over this Memorystore-managed peering.
+FIX: manually deleted servicenetworking-googleapis-com peering via GCP
+Console UI (had a working Delete button once enough time had passed --
+CLI/terraform destroy attempts had failed even after 5+ min waits).
+Once deleted, terraform destroy immediately succeeded on the remaining
+3 resources.
+LESSON: when Memorystore/Redis is provisioned via Terraform, expect
+`terraform destroy` to potentially get stuck on VPC peering cleanup.
+Known workaround: check GCP Console's VPC network peering page directly
+if destroy hangs on FLOW_SN_DC_RESOURCE_PREVENTING_DELETE_CONNECTION --
+don't just keep retrying terraform destroy blindly, the resource visible
+in Terraform's error is not always the actual blocking dependency.
