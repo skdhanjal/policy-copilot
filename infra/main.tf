@@ -170,3 +170,90 @@ resource "google_secret_manager_secret_version" "gateway_app_key" {
   secret      = google_secret_manager_secret.gateway_app_key.id
   secret_data = var.gateway_app_key
 }
+
+resource "google_cloud_run_v2_service" "litellm" {
+  name     = "policy-copilot-litellm"
+  location = var.region
+  depends_on = [google_artifact_registry_repository.docker_repo]
+
+  template {
+    containers {
+      image = "${var.region}-docker.pkg.dev/${var.project_id}/${google_artifact_registry_repository.docker_repo.repository_id}/litellm:v1"
+      args = ["--config", "/app/config.yaml", "--port", "4000"]
+      ports {
+        container_port = 4000
+      }
+      resources {
+        limits = {
+          memory = "2Gi"
+        }
+      }
+      startup_probe {
+        tcp_socket {
+          port = 4000
+        }
+        initial_delay_seconds = 10
+        timeout_seconds       = 5
+        period_seconds        = 5
+        failure_threshold     = 10
+      }
+      env {
+        name  = "OPENAI_API_KEY"
+        value_source {
+          secret_key_ref {
+            secret  = google_secret_manager_secret.openai_api_key.secret_id
+            version = "latest"
+          }
+        }
+      }
+      env {
+        name  = "GEMINI_API_KEY"
+        value_source {
+          secret_key_ref {
+            secret  = google_secret_manager_secret.gemini_api_key.secret_id
+            version = "latest"
+          }
+        }
+      }
+      env {
+        name  = "LITELLM_MASTER_KEY"
+        value_source {
+          secret_key_ref {
+            secret  = google_secret_manager_secret.litellm_master_key.secret_id
+            version = "latest"
+          }
+        }
+      }
+    }
+  }
+}
+
+resource "google_artifact_registry_repository" "docker_repo" {
+  location      = var.region
+  repository_id = "policy-copilot"
+  format        = "DOCKER"
+  depends_on    = [google_project_service.compute]
+}
+
+resource "google_secret_manager_secret_iam_member" "litellm_openai" {
+  secret_id = google_secret_manager_secret.openai_api_key.secret_id
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${data.google_project.current.number}-compute@developer.gserviceaccount.com"
+}
+
+resource "google_secret_manager_secret_iam_member" "litellm_gemini" {
+  secret_id = google_secret_manager_secret.gemini_api_key.secret_id
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${data.google_project.current.number}-compute@developer.gserviceaccount.com"
+}
+
+resource "google_secret_manager_secret_iam_member" "litellm_master" {
+  secret_id = google_secret_manager_secret.litellm_master_key.secret_id
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${data.google_project.current.number}-compute@developer.gserviceaccount.com"
+}
+
+data "google_project" "current" {
+  project_id = var.project_id
+}
+
