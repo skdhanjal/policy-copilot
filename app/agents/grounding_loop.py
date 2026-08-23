@@ -11,6 +11,7 @@ from app.rag.generate import generate, GeneratedAnswer
 from app.rag.eval_metrics import check_date_bindings
 
 MAX_RETRIES = 2
+MAX_COST_USD = 0.05  # ~2-3x a single diachronic call's real cost (~$0.02)
 
 class AgentState(TypedDict):
     pool: asyncpg.Pool
@@ -19,6 +20,7 @@ class AgentState(TypedDict):
     answer: GeneratedAnswer
     retries: int
     grounded: bool
+    total_cost: float
 
 
 async def retrieve_node(state: AgentState) -> dict:
@@ -32,8 +34,12 @@ async def generate_node(state: AgentState) -> dict:
     if retries > 0:
         q = f"{state['question']}\n\n(Retry {retries}: your previous answer misattributed a fact to the wrong version. Only attribute a claim to a version if it appears verbatim in THAT version's block.)"
     answer = await generate(state["result"], q)
-    return {"answer": answer, "retries": retries + 1}
-
+    
+    call_cost = answer.llm_call.actual_cost_usd if answer.llm_call else 0.0
+    total_cost = state.get("total_cost", 0.0) + call_cost
+    
+    return {"answer": answer, "retries": retries + 1, "total_cost": total_cost}
+    
 
 def check_node(state: AgentState) -> dict:
     all_versions = [v for versions in state["result"].lineages.values() for v in versions]
@@ -47,6 +53,10 @@ def check_node(state: AgentState) -> dict:
 def route_after_check(state: AgentState) -> str:
     if state["grounded"] or state.get("retries", 0) >= MAX_RETRIES:
         return END
+    
+    if state.get("total_cost", 0.0) >= MAX_COST_USD:
+        return END
+    
     return "generate"
 
 
