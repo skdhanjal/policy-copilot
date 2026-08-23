@@ -729,3 +729,39 @@ time, the actual production service.
 Verified end-to-end: real image, real Secret Manager values, real
 health check, temporarily made public to confirm, then locked back to
 private (403 confirmed after ~60s IAM propagation delay).
+
+---
+
+## D44 -- terraform apply alone does NOT fully restore state; manual steps needed after
+Confirmed: `terraform apply` recreates all INFRASTRUCTURE (Cloud SQL,
+Redis, VPC connector, secrets, LiteLLM service, Artifact Registry) but
+NOT data/images. After a future `terraform apply` from scratch, these
+manual steps are still required before the system is usable:
+
+1. Rebuild and push the LiteLLM image (destroyed with the registry):
+   cd infra && gcloud auth configure-docker asia-south1-docker.pkg.dev
+   docker build -t asia-south1-docker.pkg.dev/sentinel-desk-dev/policy-copilot/litellm:v1 -f litellm.Dockerfile .
+   docker push asia-south1-docker.pkg.dev/sentinel-desk-dev/policy-copilot/litellm:v1
+
+2. Re-export all TF_VAR_* from .env before any terraform command:
+   export $(grep TF_VAR_db_password .env)
+   export TF_VAR_openai_api_key=$(grep OPENAI_API_KEY .env | cut -d= -f2)
+   export TF_VAR_gemini_api_key=$(grep GEMINI_API_KEY .env | cut -d= -f2)
+   export TF_VAR_litellm_master_key=$(grep LITELLM_MASTER_KEY .env | cut -d= -f2)
+   export TF_VAR_gateway_app_key=$(grep GATEWAY_APP_KEY .env | cut -d= -f2)
+
+3. Apply schema.sql against the fresh Cloud SQL instance (NOT yet
+   automated -- schema.sql exists but nothing applies it via Terraform).
+   Still needs a manual/scripted connection via cloud-sql-proxy.
+
+4. Re-run ingest (app/rag/ingest.py) to repopulate the eCFR corpus --
+   fresh Cloud SQL instance has zero data.
+
+5. API service Cloud Run resource was never created this session
+   (deferred) -- still needs to be written in Terraform before a full
+   deploy is possible, including VPC connector attachment (unlike
+   LiteLLM, the API service DOES need it for Redis/Postgres access).
+
+NOT yet automated as Terraform null_resources: items 1, 3, 4 above.
+Candidate future improvement: wrap these in null_resource/local-exec
+like we did for pgvector enablement, so a single apply truly suffices.
