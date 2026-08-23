@@ -663,3 +663,15 @@ langgraph/langgraph-checkpoint-postgres LAST via separate pip install
 call, not single -r file. Documented as accepted risk, not fixed --
 real fix would mean pinning to compatible major versions of both
 libraries, which don't currently exist together.
+
+---
+
+## D39 -- Root cause confirmed via LangChain docs: v1.0 migration broke ragas 0.2.10
+LangChain docs confirm ChatVertexAI was deprecated/moved out of
+langchain-community into langchain_google_vertexai as part of LangChain
+v1.0 (Oct 2025) restructuring. ragas 0.2.10's code still imports from
+the OLD location -- genuinely broken against current LangChain, not
+fixable by installing additional packages (confirmed: installing
+langchain-google-vertexai did not help, since ragas's import statement
+itself points at the old path). No single-environment fix exists.
+Confirms D38's two-venv approach is correct, not a workaround.
