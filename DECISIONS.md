@@ -825,3 +825,30 @@ that persists across normal restarts of Docker Desktop and even
 `wsl --shutdown` -- required a full system reboot to clear. If this
 recurs, don't waste time on Docker-specific fixes first; try full OS
 restart early.
+
+---
+
+## D48 -- null_resource schema/pgvector setup was silently failing; replaced with Cloud Run Job
+Discovered: after making Cloud SQL private (D-earlier), the
+null_resource local-exec provisioners for pgvector and schema
+application were running FROM THE LOCAL MACHINE (outside the VPC),
+which cannot reach a private IP at all -- confirmed via direct
+cloud-sql-proxy test showing i/o timeout. Terraform reported apply
+SUCCESS regardless, because local-exec's shell script exit code, not
+each internal command's success, is what Terraform checks -- a
+background & process failing silently doesn't propagate.
+Verified via a diagnostic Cloud Run Job (runs INSIDE the VPC, can
+actually reach private IP): pgvector extension was genuinely absent
+despite earlier "successful" null_resource runs.
+FIX: replaced both null_resources with a single google_cloud_run_v2_job
+that runs psql -f schema.sql (via file() Terraform function, no custom
+image needed) with -v ON_ERROR_STOP=1, so real failures now surface
+loudly. Verified working end-to-end: schema genuinely applied (CREATE
+TABLE x3, CREATE EXTENSION x2, INSERT 0 3 confirmed in logs), re-run
+correctly failed loud on duplicate tables (proving ON_ERROR_STOP works),
+and /query against the real deployed API correctly returns a clean
+"no documents found" response instead of crashing.
+LESSON: local-exec provisioners in Terraform should be treated with
+suspicion when the target resource has private-only networking --
+verify they can actually reach what they claim to configure, don't
+trust "apply succeeded" alone.
