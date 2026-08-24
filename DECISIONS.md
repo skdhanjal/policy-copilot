@@ -852,3 +852,24 @@ LESSON: local-exec provisioners in Terraform should be treated with
 suspicion when the target resource has private-only networking --
 verify they can actually reach what they claim to configure, don't
 trust "apply succeeded" alone.
+
+---
+
+## D49 -- eCFR blocks Cloud Run's outbound traffic; ingest must run locally, not in-cloud
+Real ingest job on Cloud Run failed with 403 Forbidden from eCFR's API,
+confirmed via isolated diagnostic job (no VPC connector in the path,
+ruling out our networking config as the cause). Web search confirmed
+root cause: eCFR.gov and FederalRegister.gov explicitly state
+"Due to aggressive automated scraping... programmatic access to these
+sites is limited" with CAPTCHA-gated bot verification
+(unblock.federalregister.gov). This is deliberate anti-bot policy, not
+a misconfiguration on our side, and not something an IP allowlist
+request straightforwardly resolves (Hacker News report: even completing
+the CAPTCHA path sometimes returns 500).
+DECISION: ingest runs LOCALLY (where it has worked reliably throughout
+this project, likely due to residential/ISP IP not matching cloud
+datacenter bot-detection patterns), writing through a Cloud SQL Auth
+Proxy tunnel directly into the real cloud database. The Cloud Run ingest
+JOB resource stays defined in Terraform for potential future use (e.g.
+if eCFR data is pre-fetched and bundled, or a different access method
+is arranged) but is NOT the primary ingest path.
