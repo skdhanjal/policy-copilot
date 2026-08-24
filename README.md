@@ -64,3 +64,4 @@ Not hidden -- see DECISIONS.md for full detail on each.
     uv run pytest tests/
     python3 -m evals.runners.ci_gate
     python3 redteam/run.py
+# CI/CD trigger test Mon Aug 24 11:30:00 UTC 2026
