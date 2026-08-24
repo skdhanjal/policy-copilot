@@ -29,6 +29,8 @@ See RUNBOOK.md for the full, tested deployment sequence. Real infrastructure via
 
 ## Architecture
 
+![Architecture](docs/architecture.svg)
+
 Question flows through: PII redaction and injection detection (Phase 6 guardrails), intent classification (point-in-time / diachronic / historical), two-stage retrieval (semantic resolve + relational lineage expand), reranking (cross-encoder, cuts context roughly in half), a LangGraph agent that generates and checks grounding, retrying up to twice on failure with hard caps ($0.05, 30s wall-clock), generation via the LiteLLM gateway with OpenAI primary and Gemini fallback, and a Redis exact-match cache keyed on retrieved content rather than raw question text. The answer returns with citations and honest grounding/cost signals.
 
 ## Project structure
