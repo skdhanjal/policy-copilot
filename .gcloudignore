@@ -1,0 +1,9 @@
+.venv/
+.venv-eval/
+.git/
+__pycache__/
+*.pyc
+.env
+redteam/
+evals/reports/
+node_modules/

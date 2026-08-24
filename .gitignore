@@ -3,3 +3,7 @@ __pycache__/
 *.pyc
 .env
 test.py
+infra/.terraform/
+infra/terraform.tfstate
+infra/terraform.tfstate.backup
+infra/*.tfstate.lock.info
