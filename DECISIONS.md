@@ -804,3 +804,24 @@ Confirmed gaps, not yet built:
 7. Rollback trigger, dashboards, alerts (Phase 8, not started)
 8. Judge calibration (Cohen's kappa), golden set growth to 50 items (Phase 2, deferred)
 9. D20's underlying grounding bug still open (agent retry mitigates, doesn't fix)
+
+---
+
+## D47 -- API image reduced 8.69GB -> 2.18GB via CPU-only torch
+sentence-transformers pulls full GPU torch + nvidia-* packages by
+default (~4.6GB dead weight, no GPU exists in our deployment target).
+Tried uv's [tool.uv.sources] index override -- did NOT work, torch
+still resolved nvidia deps regardless (uv version/torch version
+mismatch in override handling, not investigated further). Working fix:
+Dockerfile installs everything else via `pip install --no-deps` (uv
+already resolved full dependency tree, so --no-deps is safe here), THEN
+installs torch separately via `pip install torch --index-url
+https://download.pytorch.org/whl/cpu`, which correctly pulls a small
+(~192MB) CPU-tagged wheel instead of the GPU build. Verified embedding
+model still loads and functions correctly post-fix.
+Also unrelated but discovered along the way: Docker Desktop can enter a
+genuine stuck "distro installation timeout" state (WSL command hangs)
+that persists across normal restarts of Docker Desktop and even
+`wsl --shutdown` -- required a full system reboot to clear. If this
+recurs, don't waste time on Docker-specific fixes first; try full OS
+restart early.
