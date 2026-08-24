@@ -926,3 +926,31 @@ exhausting 2 retries -- confirms D20's underlying bug is still real,
 but the agent now HONESTLY reports uncertainty instead of silently
 returning a wrong answer. This is the intended value of the agent loop:
 visibility into failure, not a full fix for D20 itself.
+
+---
+
+## D52 -- CI/CD pipeline mechanics verified end-to-end; CI gate cannot run in pipeline yet (ragas isolation issue resurfaces)
+Full cloudbuild.yaml tested via manual gcloud builds submit
+(cloudbuild-test.yaml, $SHORT_SHA replaced with a fixed tag for the
+test). Build, unit tests, push, and gcloud run deploy --no-traffic
+--tag=canary all succeeded, ~10 min total. Verified traffic split
+directly: old revision retained 100% real traffic, new revision
+isolated at its own canary URL with 0% -- correct, safe pattern.
+
+Real gap found: the CI gate step (evals.runners.ci_gate) failed with
+ModuleNotFoundError: No module named 'datasets' -- ragas (imported by
+checks.py) is deliberately NOT in main uv dependencies (D37-D39,
+ragas/langgraph conflict), only in the separate .venv-eval. The CI gate
+cannot run inside the standard pipeline environment without solving
+this isolation problem in a CI context too. Skipped for this test run;
+real fix needed before the gate can be re-enabled in the pipeline
+(likely: a separate pipeline step/container using .venv-eval's
+dependency set, mirroring the local dual-venv pattern).
+
+Also decided: pipeline does gcloud run deploy directly, NOT terraform
+apply -- deliberate separation of infra provisioning (manual, rare,
+needs local secrets from .env) from app deployment (automatic,
+frequent, Cloud Run already has secret_key_ref wiring). Accepted
+trade-off: Terraform's services.tf image tag (v1) will drift from the
+real deployed tag ($SHORT_SHA) after pipeline runs -- normal, accepted
+pattern (Terraform manages shape, deploy tool manages current version).
