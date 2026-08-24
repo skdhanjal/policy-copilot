@@ -907,3 +907,22 @@ model cold start (D29, ~5s), and the additional real network hops
 (API -> LiteLLM -> OpenAI, plus VPC connector overhead) not present in
 local warm testing. Real Phase 5 latency work should be re-measured
 against actual cloud infrastructure, not just local.
+
+---
+
+## D51 -- /query was bypassing the agent graph entirely; fixed, and confirms D20 still open
+Real gap found: /query called plain retrieve()+generate() directly,
+never using app/agents/grounding_loop.py's LangGraph self-correction
+loop built in Phase 7. Checkpointing, retry-on-grounding-failure, and
+cost/iteration caps were completely inert in the deployed service.
+Fixed: /query now invokes the compiled graph with a per-request
+thread_id, AgentContext(pool, redis) for dependency injection. Added
+Redis caching to generate_node (was missing), cleaned a stale unused
+pool field from AgentState left over from the D34 context_schema fix.
+Verified working: point-in-time questions correctly grounded first
+try, cache hits correctly report $0 cost, diachronic notification-event
+question CORRECTLY detected as ungrounded (agent_grounded=false) after
+exhausting 2 retries -- confirms D20's underlying bug is still real,
+but the agent now HONESTLY reports uncertainty instead of silently
+returning a wrong answer. This is the intended value of the agent loop:
+visibility into failure, not a full fix for D20 itself.
