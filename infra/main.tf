@@ -364,6 +364,46 @@ resource "google_cloud_run_v2_job" "ingest" {
           name  = "POSTGRES_DSN"
           value = "postgresql://copilot:${var.db_password}@${google_sql_database_instance.main.private_ip_address}:5432/copilot"
         }
+        env {
+          name  = "REDIS_DSN"
+          value = "redis://${google_redis_instance.cache.host}:6379/0"
+        }
+        env {
+          name  = "GATEWAY_APP_KEY"
+          value_source {
+            secret_key_ref {
+              secret  = google_secret_manager_secret.gateway_app_key.secret_id
+              version = "latest"
+            }
+          }
+        }
+        env {
+          name  = "LITELLM_MASTER_KEY"
+          value_source {
+            secret_key_ref {
+              secret  = google_secret_manager_secret.litellm_master_key.secret_id
+              version = "latest"
+            }
+          }
+        }
+        env {
+          name  = "OPENAI_API_KEY"
+          value_source {
+            secret_key_ref {
+              secret  = google_secret_manager_secret.openai_api_key.secret_id
+              version = "latest"
+            }
+          }
+        }
+        env {
+          name  = "GEMINI_API_KEY"
+          value_source {
+            secret_key_ref {
+              secret  = google_secret_manager_secret.gemini_api_key.secret_id
+              version = "latest"
+            }
+          }
+        }
       }
 
       max_retries = 1
