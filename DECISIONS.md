@@ -873,3 +873,37 @@ Proxy tunnel directly into the real cloud database. The Cloud Run ingest
 JOB resource stays defined in Terraform for potential future use (e.g.
 if eCFR data is pre-fetched and bundled, or a different access method
 is arranged) but is NOT the primary ingest path.
+
+---
+
+## D50 -- Full end-to-end cloud deployment VERIFIED working; LiteLLM made permanently public (documented trade-off)
+Real, complete success: /query against the live Cloud Run API returns a
+correct, grounded answer using real Cloud SQL data (1203 ingested
+chunks), real LiteLLM routing, real OpenAI call.
+Root cause of the final blocker: Cloud Run private services require
+BOTH LiteLLM's own bearer-token auth AND a separate Google-issued
+identity token for service-to-service calls. Our generate.py's plain
+AsyncOpenAI client only sends the bearer token, never fetches/attaches
+a Google identity token. Confirmed via direct curl test bypassing
+gcloud's proxy (which auto-injects the token): the SAME 401 "Your
+client does not have permission" page appeared calling LiteLLM's public
+URL directly with only the bearer key -- proving Cloud Run's OWN IAM
+layer was rejecting the request before LiteLLM's code ever ran.
+DECISION (explicit, deliberate trade-off): made LiteLLM permanently
+public (allUsers + run.invoker), relying solely on LITELLM_MASTER_KEY
+for protection -- same security model already proven throughout local
+development this whole session. Chose this over the more correct fix
+(fetching a real Google identity token in generate.py before each call)
+because: (a) project is not yet in real production use, (b) avoids a
+code change requested to be deferred, (c) documented here explicitly as
+a known, accepted gap rather than hidden.
+FOLLOW-UP (before real production traffic): implement proper identity
+token fetching in generate.py (via metadata.google.internal) OR switch
+to Option 1 (VPC-internal-only ingress) so LiteLLM is never reachable
+from the public internet at all, even with the master key.
+Also observed: first real end-to-end request was notably slow --
+combination of Cloud Run cold start, sentence-transformers embedding
+model cold start (D29, ~5s), and the additional real network hops
+(API -> LiteLLM -> OpenAI, plus VPC connector overhead) not present in
+local warm testing. Real Phase 5 latency work should be re-measured
+against actual cloud infrastructure, not just local.
