@@ -39,20 +39,6 @@ resource "google_sql_user" "app_user" {
   password = var.db_password
 }
 
-resource "null_resource" "enable_pgvector" {
-  depends_on = [google_sql_database.app_db]
-
-  provisioner "local-exec" {
-    command = <<-EOT
-      cloud-sql-proxy ${google_sql_database_instance.main.connection_name} --port 5433 &
-      PROXY_PID=$!
-      sleep 5
-      PGPASSWORD='${var.db_password}' psql -h localhost -p 5433 -U copilot -d copilot -c "CREATE EXTENSION IF NOT EXISTS vector;"
-      kill $PROXY_PID
-    EOT
-  }
-}
-
 resource "google_vpc_access_connector" "connector" {
   name          = "policy-copilot-conn"
   region        = var.region
@@ -314,6 +300,33 @@ resource "google_cloud_run_v2_service" "api" {
           }
         }
       }
+      env {
+        name  = "OPENAI_API_KEY"
+        value_source {
+          secret_key_ref {
+            secret  = google_secret_manager_secret.openai_api_key.secret_id
+            version = "latest"
+          }
+        }
+      }
+      env {
+        name  = "GEMINI_API_KEY"
+        value_source {
+          secret_key_ref {
+            secret  = google_secret_manager_secret.gemini_api_key.secret_id
+            version = "latest"
+          }
+        }
+      }
+      env {
+        name  = "LITELLM_MASTER_KEY"
+        value_source {
+          secret_key_ref {
+            secret  = google_secret_manager_secret.litellm_master_key.secret_id
+            version = "latest"
+          }
+        }
+      }
     }
   }
 }
@@ -322,4 +335,96 @@ resource "google_secret_manager_secret_iam_member" "api_gateway_key" {
   secret_id = google_secret_manager_secret.gateway_app_key.secret_id
   role      = "roles/secretmanager.secretAccessor"
   member    = "serviceAccount:${data.google_project.current.number}-compute@developer.gserviceaccount.com"
+}
+
+resource "google_cloud_run_v2_job" "ingest" {
+  name       = "policy-copilot-ingest"
+  location   = var.region
+  depends_on = [google_artifact_registry_repository.docker_repo]
+
+  template {
+    template {
+      vpc_access {
+        connector = google_vpc_access_connector.connector.id
+        egress    = "PRIVATE_RANGES_ONLY"
+      }
+
+      containers {
+        image = "${var.region}-docker.pkg.dev/${var.project_id}/${google_artifact_registry_repository.docker_repo.repository_id}/api:v1"
+        command = ["python3", "-m", "app.rag.ingest"]
+
+        resources {
+          limits = {
+            memory = "2Gi"
+            cpu    = "2000m"
+          }
+        }
+
+        env {
+          name  = "POSTGRES_DSN"
+          value = "postgresql://copilot:${var.db_password}@${google_sql_database_instance.main.private_ip_address}:5432/copilot"
+        }
+      }
+
+      max_retries = 1
+      timeout     = "1800s"
+    }
+  }
+}
+
+resource "google_secret_manager_secret_iam_member" "api_openai" {
+  secret_id = google_secret_manager_secret.openai_api_key.secret_id
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${data.google_project.current.number}-compute@developer.gserviceaccount.com"
+}
+
+resource "google_secret_manager_secret_iam_member" "api_gemini" {
+  secret_id = google_secret_manager_secret.gemini_api_key.secret_id
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${data.google_project.current.number}-compute@developer.gserviceaccount.com"
+}
+
+resource "google_secret_manager_secret_iam_member" "api_litellm_master" {
+  secret_id = google_secret_manager_secret.litellm_master_key.secret_id
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${data.google_project.current.number}-compute@developer.gserviceaccount.com"
+}
+
+resource "google_cloud_run_v2_service_iam_member" "api_public_test" {
+  name     = google_cloud_run_v2_service.api.name
+  location = var.region
+  role     = "roles/run.invoker"
+  member   = "allUsers"
+}
+
+resource "google_cloud_run_v2_job" "schema_setup" {
+  name       = "policy-copilot-schema-setup"
+  location   = var.region
+  depends_on = [google_artifact_registry_repository.docker_repo]
+
+  template {
+    template {
+      vpc_access {
+        connector = google_vpc_access_connector.connector.id
+        egress    = "PRIVATE_RANGES_ONLY"
+      }
+
+      containers {
+        image   = "postgres:16"
+        command = ["psql"]
+        args = [
+          "-h", google_sql_database_instance.main.private_ip_address,
+          "-U", "copilot",
+          "-d", "copilot",
+          "-v", "ON_ERROR_STOP=1",
+          "-c", file("${path.module}/schema.sql")
+        ]
+        env {
+          name  = "PGPASSWORD"
+          value = var.db_password
+        }
+      }
+      max_retries = 0
+    }
+  }
 }
