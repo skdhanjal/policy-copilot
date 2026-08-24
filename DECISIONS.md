@@ -790,3 +790,17 @@ Known workaround: check GCP Console's VPC network peering page directly
 if destroy hangs on FLOW_SN_DC_RESOURCE_PREVENTING_DELETE_CONNECTION --
 don't just keep retrying terraform destroy blindly, the resource visible
 in Terraform's error is not always the actual blocking dependency.
+
+---
+
+## D46 -- Remaining work tracker (README, diagram, and Phase 8 completion)
+Confirmed gaps, not yet built:
+1. README.md -- project overview, setup instructions, doesn't exist
+2. Architecture diagram (visual) -- doesn't exist
+3. API service Cloud Run Terraform resource (LiteLLM done, API service not)
+4. Schema application automation (manual/undone)
+5. Ingest job automation
+6. Real end-to-end canary test with live traffic
+7. Rollback trigger, dashboards, alerts (Phase 8, not started)
+8. Judge calibration (Cohen's kappa), golden set growth to 50 items (Phase 2, deferred)
+9. D20's underlying grounding bug still open (agent retry mitigates, doesn't fix)
