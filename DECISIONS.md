@@ -954,3 +954,21 @@ frequent, Cloud Run already has secret_key_ref wiring). Accepted
 trade-off: Terraform's services.tf image tag (v1) will drift from the
 real deployed tag ($SHORT_SHA) after pipeline runs -- normal, accepted
 pattern (Terraform manages shape, deploy tool manages current version).
+
+---
+
+## D53 -- CI/CD pipeline fully live: GitHub push -> automatic build/test/deploy-as-canary
+Real GitHub trigger connected (github-policy-copilot-trigger, region
+asia-south1). Fixed two real config issues found via testing: (1) Cloud
+Build requires explicit logging config (CLOUD_LOGGING_ONLY) when a
+custom service account is used, undocumented until hit directly; (2)
+CI gate step disabled inline with a clear comment (D52 -- ragas
+isolation, not yet solvable in the pipeline environment).
+Verified genuinely working end-to-end via real git push: build (2:39),
+tests (1:50), CI gate placeholder (0:01), push (1:22), deploy (3:40) --
+all succeeded automatically, zero manual commands. Confirmed via
+`gcloud run services describe ... status.traffic`: original revision
+correctly retained 100% real traffic, new revision correctly isolated
+at 0% on its own canary URL. This is a complete, safe, real automated
+deployment pipeline -- code push to isolated canary, no manual steps,
+no accidental live traffic exposure.
