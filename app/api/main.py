@@ -12,6 +12,9 @@ from fastapi import FastAPI, Response, status
 from pydantic import BaseModel
 from app.rag.retrieval import retrieve, InjectionDetected
 from app.rag.generate import generate
+import uuid
+from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+from app.agents.grounding_loop import build_graph, AgentContext
 
 # How often the heartbeat wakes up.
 HEARTBEAT_INTERVAL_S = 1.0
@@ -51,6 +54,12 @@ async def lifespan(app: FastAPI):
     )
     app.state.redis = Redis.from_url(settings.redis_dsn, decode_responses=True)
     
+    app.state.checkpointer_cm = AsyncPostgresSaver.from_conn_string(settings.postgres_dsn)
+    app.state.checkpointer = await app.state.checkpointer_cm.__aenter__()
+    await app.state.checkpointer.setup()
+    app.state.agent_graph = build_graph(checkpointer=app.state.checkpointer)
+
+    
     task = asyncio.create_task(heartbeat())
     # Hold a reference. asyncio only keeps weak references to tasks, so a
     # task with no strong reference can be garbage collected mid-flight.
@@ -63,6 +72,7 @@ async def lifespan(app: FastAPI):
         task.cancel()
         await app.state.pg.close()
         await app.state.redis.aclose()
+        await app.state.checkpointer_cm.__aexit__(None, None, None)
         try:
             await task
         except asyncio.CancelledError:
@@ -77,13 +87,21 @@ class QueryRequest(BaseModel):
 
 @app.post("/query")
 async def query(req: QueryRequest, response: Response) -> dict:
+    thread_id = str(uuid.uuid4())
+    ctx = AgentContext(pool=app.state.pg, redis=app.state.redis)
+    config = {"configurable": {"thread_id": thread_id}}
+
     try:
-        result = await retrieve(app.state.pg, req.question)
+        state = await app.state.agent_graph.ainvoke(
+            {"question": req.question, "retries": 0, "total_cost": 0.0},
+            context=ctx, config=config,
+        )
     except InjectionDetected:
         response.status_code = status.HTTP_400_BAD_REQUEST
         return {"error": "request blocked", "reason": "injection_detected"}
 
-    answer = await generate(result, req.question, redis=app.state.redis)
+    answer = state["answer"]
+    result = state["result"]
 
     if answer.rate_limited:
         response.status_code = status.HTTP_429_TOO_MANY_REQUESTS
@@ -97,6 +115,9 @@ async def query(req: QueryRequest, response: Response) -> dict:
         "rate_limited": answer.rate_limited,
         "pii_found": result.pii_found,
         "intent": result.intent.value,
+        "agent_retries": state["retries"],
+        "agent_total_cost_usd": round(state["total_cost"], 6),
+        "agent_grounded": state["grounded"],
     }
 
 

@@ -18,7 +18,6 @@ MAX_COST_USD = 0.05  # ~2-3x a single diachronic call's real cost (~$0.02)
 MAX_WALL_CLOCK_S = 30.0
 
 class AgentState(TypedDict):
-    pool: asyncpg.Pool
     question: str
     result: RetrievalResult
     answer: GeneratedAnswer
@@ -30,18 +29,20 @@ class AgentState(TypedDict):
 @dataclass
 class AgentContext:
     pool: asyncpg.Pool
+    redis: object = None
     
 async def retrieve_node(state: AgentState, runtime: Runtime[AgentContext]) -> dict:
     result = await retrieve(runtime.context.pool, state["question"])
     return {"result": result, "start_time": time.monotonic()}
 
 
-async def generate_node(state: AgentState) -> dict:
+async def generate_node(state: AgentState, runtime: Runtime[AgentContext]) -> dict:
     retries = state.get("retries", 0)
     q = state["question"]
     if retries > 0:
         q = f"{state['question']}\n\n(Retry {retries}: your previous answer misattributed a fact to the wrong version. Only attribute a claim to a version if it appears verbatim in THAT version's block.)"
-    answer = await generate(state["result"], q)
+    
+    answer = await generate(state["result"], q, redis=runtime.context.redis)
     
     call_cost = answer.llm_call.actual_cost_usd if answer.llm_call else 0.0
     total_cost = state.get("total_cost", 0.0) + call_cost
