@@ -295,7 +295,7 @@ resource "google_cloud_run_v2_service" "api" {
         name  = "GATEWAY_APP_KEY"
         value_source {
           secret_key_ref {
-            secret  = google_secret_manager_secret.gateway_app_key.secret_id
+            secret  = google_secret_manager_secret.litellm_master_key.secret_id
             version = "latest"
           }
         }
@@ -430,12 +430,6 @@ resource "google_secret_manager_secret_iam_member" "api_litellm_master" {
   member    = "serviceAccount:${data.google_project.current.number}-compute@developer.gserviceaccount.com"
 }
 
-resource "google_cloud_run_v2_service_iam_member" "api_public_test" {
-  name     = google_cloud_run_v2_service.api.name
-  location = var.region
-  role     = "roles/run.invoker"
-  member   = "allUsers"
-}
 
 resource "google_cloud_run_v2_job" "schema_setup" {
   name       = "policy-copilot-schema-setup"
@@ -467,4 +461,11 @@ resource "google_cloud_run_v2_job" "schema_setup" {
       max_retries = 0
     }
   }
+}
+
+resource "google_cloud_run_v2_service_iam_member" "litellm_public" {
+  name     = google_cloud_run_v2_service.litellm.name
+  location = var.region
+  role     = "roles/run.invoker"
+  member   = "allUsers"
 }

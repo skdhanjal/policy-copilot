@@ -93,6 +93,14 @@ eCFR blocks Cloud Run's outbound IP range (403 Forbidden, confirmed via
 diagnostic testing, see DECISIONS.md D49). Ingest must run from your
 local machine instead, tunneled into the cloud database.
 
+> **WARNING -- easy to forget:** Steps 6a-6e open a real, live
+> security exposure (public database, password-only protection) for the
+> DURATION of ingest. This has actually happened before in real use --
+> the team moved on to other work after ingest finished and did NOT
+> revert 6e, leaving the database publicly exposed unnoticed. Set a
+> reminder, or run `grep ipv4_enabled infra/main.tf` immediately after
+> ingest completes as a hard checkpoint before doing anything else.
+
 **6a. Temporarily re-enable Cloud SQL public IP** (local machine can't
 reach the private IP -- it's not inside the VPC):
 
