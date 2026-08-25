@@ -1054,3 +1054,64 @@ pool has no VPC access, which is unrelated to ragas/langgraph at all.
 The dual-venv image, the `/opt/venv-eval` build stage, and
 scripts/setup_eval_env.sh are gone -- one venv covers both app and eval
 code now.
+
+---
+
+## D55 -- torch pinned to the CPU wheel index at lock time, not just in the
+Dockerfile; fixes local dev pulling multi-GB CUDA deps nobody here uses
+D47 fixed the DEPLOYED image's torch size (8.69GB -> 2.18GB) by having
+the Dockerfile manually grep torch/nvidia-*/triton lines out of
+requirements.txt and reinstall torch separately from
+download.pytorch.org/whl/cpu. That fix was Dockerfile-only -- `uv sync`
+on a dev machine still resolved plain `torch` from default PyPI (the
+CUDA build), pulling ~18 nvidia-*/cuda-*/triton packages with it. Nobody
+working on this project runs a local GPU.
+
+Fixed at the source instead, via uv's own documented pattern
+(`[tool.uv.sources]` + `[[tool.uv.index]]`, `explicit = true`) in
+pyproject.toml, so `uv lock`/`uv sync` resolve the CPU build everywhere,
+not just in CI.
+
+Real, non-obvious finding along the way: the override was silently
+IGNORED on the first attempt. torch was only ever a transitive dependency
+(via sentence-transformers) -- confirmed via `uv tree` that `uv lock`
+still resolved plain CUDA `torch` from `pypi.org/simple` despite the
+source override being configured correctly. Adding `torch` as an
+EXPLICIT direct project dependency (even though sentence-transformers
+already requires it) was what made the override take effect -- confirmed
+via `uv.lock`'s recorded `source = { registry = ... }` field flipping to
+`download.pytorch.org/whl/cpu` only after that change, and via `uv tree`
+showing 18 nvidia-*/cuda-*/triton packages removed from the resolution
+in the same run.
+
+Second finding: with torch no longer resolving from PyPI at all, the
+Dockerfile's original grep-strip-and-reinstall dance was mostly solving
+a problem that no longer exists (nvidia-*/triton never appear in
+requirements.txt now) -- simplified to a single
+`pip install --no-deps -r requirements.txt --extra-index-url
+https://download.pytorch.org/whl/cpu`. `--extra-index-url` is still
+required: confirmed a plain `pip install -r requirements.txt` fails to
+locate `torch==2.13.0+cpu`, since that exact version string is only
+published on the PyTorch CPU index, not on PyPI.
+
+Verified end-to-end, not assumed: real `uv lock` run showing the 18
+packages removed and torch's source flipped; a real `pip install
+--extra-index-url` run in a clean venv installing `torch-2.13.0+cpu`
+correctly; a real functional check (`torch.cuda.is_available()` ->
+`False`, and an actual `SentenceTransformer.encode()` call producing a
+384-dim vector, not just an import); a real rebuild of the production
+Dockerfile with the simplified single-command install (2.65GB, no
+regression from D47's 2.18GB baseline plus the ragas stack); and the
+real container's `/query` endpoint (embedding + rerank in the request
+path) returning a correct, grounded answer.
+
+Follow-up: requirements-docker.txt (D40) removed. Checked whether it was
+still doing anything -- it predates this fix entirely (D40, before both
+D47 and this decision), created to strip an `-e .` editable-install line
+and header comments uv's export used to include. Confirmed neither
+reason still applies: no `-e .` line exists in the current export, and
+`#` comment lines are inert to `pip install -r` regardless (verified
+with a real install of the un-stripped requirements.txt, header intact,
+producing an identical result). Keeping two hash-pinned files in sync
+by hand was pure drift risk with nothing left for it to actually solve
+-- Dockerfile now installs directly from requirements.txt.

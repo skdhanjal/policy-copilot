@@ -1,11 +1,26 @@
 FROM python:3.12-slim AS builder
 ENV PIP_NO_CACHE_DIR=1 PYTHONDONTWRITEBYTECODE=1
 WORKDIR /build
-COPY requirements-docker.txt requirements.txt
+COPY requirements.txt requirements.txt
+# requirements-docker.txt (a copy of this file minus its header comment,
+# D40) is gone -- confirmed the only diff between the two was that
+# comment; no `-e .` line exists in the current export (that was D40's
+# real reason for stripping), and pip ignores `#` lines regardless, so
+# maintaining a second hash-pinned file to install from was pure drift
+# risk with no functional purpose left.
+#
+# pyproject.toml's [tool.uv.sources]/[tool.uv.index] now pins torch to the
+# CPU wheel index at LOCK time (torch==2.13.0+cpu, not the CUDA build) --
+# nvidia-*/triton never enter requirements.txt at all any more, so the old
+# grep-strip-and-reinstall-torch-separately dance is gone. --extra-index-url
+# is still needed here because that exact "+cpu" version string only
+# exists on download.pytorch.org, not on PyPI -- a plain `pip install`
+# without it would fail to locate this pin (confirmed: reproduced that
+# failure before adding the flag). --no-deps is safe because
+# requirements.txt is uv's fully-resolved, hash-pinned closure already.
 RUN python -m venv /opt/venv \
-    && grep -v -E "^(torch|nvidia-|triton)" requirements.txt > requirements-notorch.txt \
-    && /opt/venv/bin/pip install --no-deps -r requirements-notorch.txt \
-    && /opt/venv/bin/pip install torch --index-url https://download.pytorch.org/whl/cpu \
+    && /opt/venv/bin/pip install --no-deps -r requirements.txt \
+        --extra-index-url https://download.pytorch.org/whl/cpu \
     && /opt/venv/bin/pip check || true
 
 FROM python:3.12-slim AS runtime

@@ -25,6 +25,11 @@ dependencies = [
     "redis>=8.1.0",
     "sentence-transformers>=6.0.0",
     "tiktoken>=0.14.0",
+    "torch>=2.13.0",  # listed explicitly, not just left as sentence-transformers's
+                       # transitive dep -- confirmed the [tool.uv.sources] override
+                       # below is silently ignored for a package uv only sees
+                       # transitively; it only takes effect once torch is a direct
+                       # project dependency
     "uvicorn[standard]>=0.52.4",
 ]
 
@@ -32,4 +37,20 @@ dependencies = [
 dev = [
     "pytest>=9.1.1",
 ]
+
+# torch is a transitive dep of sentence-transformers. Default PyPI serves the
+# CUDA build on Linux -- multi-GB of nvidia-*/triton packages nobody here
+# runs on a GPU. `explicit = true` scopes this index to torch only, so it
+# never shadows the default index for anything else (per uv's own PyTorch
+# integration guide). This is what the Dockerfile used to do by hand (grep
+# torch/nvidia-*/triton out of requirements.txt, pip install torch
+# separately from this same URL) -- doing it here means `uv sync`/`uv lock`
+# resolve to the CPU build everywhere, dev machine included, not just in CI.
+[tool.uv.sources]
+torch = [{ index = "pytorch-cpu" }]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
 
