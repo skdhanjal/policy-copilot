@@ -6,6 +6,8 @@ half of today's real findings came from reading raw output, not summaries.
 
 from __future__ import annotations
 
+from evals.runners import _ragas_compat  # noqa: F401 -- must run before `import ragas`, see that module's docstring
+
 from datasets import Dataset
 from ragas import evaluate
 from ragas.metrics import (
@@ -14,10 +16,36 @@ from ragas.metrics import (
     context_precision as ragas_context_precision,
     context_recall as ragas_context_recall,
 )
+from ragas.embeddings.base import LangchainEmbeddingsWrapper
+from langchain_openai import OpenAIEmbeddings
 
 from app.rag.eval_metrics import check_date_bindings
 from app.rag.generate import GeneratedAnswer, _render_context
 from app.rag.retrieval import RetrievalResult
+
+_ragas_embeddings: LangchainEmbeddingsWrapper | None = None
+
+
+def _get_ragas_embeddings() -> LangchainEmbeddingsWrapper:
+    """answer_relevancy needs an embeddings backend, and ragas's own
+    auto-detected default is broken under current ragas + langchain-openai
+    -- confirmed by running it, not assumed. With no explicit `embeddings=`,
+    evaluate() instantiates ragas's MODERN embeddings provider
+    (ragas.embeddings.OpenAIEmbeddings), but the legacy `answer_relevancy`
+    metric class (imported above -- ragas.metrics, not .metrics.collections)
+    calls `.embed_query()`, an interface only the LEGACY wrapper implements.
+    Mixing legacy metric + modern embeddings throws `AttributeError:
+    'OpenAIEmbeddings' object has no attribute 'embed_query'`. Using the
+    matching legacy wrapper (LangchainEmbeddingsWrapper, itself deprecated
+    but functional) alongside the legacy metric class fixes it.
+
+    Built once, not per call -- same reasoning as the model singletons in
+    app/rag/embed.py and app/rag/rerank.py.
+    """
+    global _ragas_embeddings
+    if _ragas_embeddings is None:
+        _ragas_embeddings = LangchainEmbeddingsWrapper(OpenAIEmbeddings())
+    return _ragas_embeddings
 
 
 async def check_faithfulness(question: str, answer: GeneratedAnswer, result: RetrievalResult) -> dict:
@@ -26,8 +54,10 @@ async def check_faithfulness(question: str, answer: GeneratedAnswer, result: Ret
     if not contexts:
         return {"passed": None, "score": None, "note": "no context to evaluate against"}
 
+    # Column names confirmed against a real run of current ragas
+    # (question/answer/contexts -> user_input/response/retrieved_contexts).
     dataset = Dataset.from_dict({
-        "question": [question], "answer": [answer.text], "contexts": [contexts],
+        "user_input": [question], "response": [answer.text], "retrieved_contexts": [contexts],
     })
     scores = evaluate(dataset, metrics=[ragas_faithfulness])
     score = scores["faithfulness"][0]
@@ -54,10 +84,14 @@ async def check_answer_relevancy(question: str, answer: GeneratedAnswer, result:
     if not contexts:
         return {"passed": None, "score": None, "note": "no context to evaluate against"}
 
+    # answer_relevancy's required columns are just user_input/response (no
+    # contexts) -- but we still gate on "was anything retrieved at all"
+    # above, since scoring relevancy on a question nothing was retrieved
+    # for isn't meaningful.
     dataset = Dataset.from_dict({
-        "question": [question], "answer": [answer.text], "contexts": [contexts],
+        "user_input": [question], "response": [answer.text],
     })
-    scores = evaluate(dataset, metrics=[ragas_answer_relevancy])
+    scores = evaluate(dataset, metrics=[ragas_answer_relevancy], embeddings=_get_ragas_embeddings())
     score = scores["answer_relevancy"][0]
     return {
         "passed": score >= 0.7,
@@ -69,13 +103,20 @@ async def check_answer_relevancy(question: str, answer: GeneratedAnswer, result:
 async def check_context_quality(question: str, answer: GeneratedAnswer, result: RetrievalResult) -> dict:
     """Grades RETRIEVAL, not generation.
 
-    CORRECTED (was wrong originally): assumed context_precision needed no
-    ground truth, based on prior research. Running it for real threw
+    CORRECTED (was wrong originally, D19): assumed context_precision needed
+    no ground truth, based on prior research. Running it for real threw a
     ValueError requiring a 'reference' column -- this Ragas version's
     context_precision DOES need ground truth, same as context_recall.
-    Both are now gated on the same expected_answer field, skipped
-    together when absent, rather than one crashing and one silently
-    working as originally (wrongly) designed.
+    Both are gated on the same expected_answer field, skipped together
+    when absent, rather than one crashing and one silently working as
+    originally (wrongly) designed.
+
+    D19 also found context_precision and context_recall wanted the SAME
+    ground-truth data under two DIFFERENT column names ('reference' vs
+    'ground_truth') on ragas 0.2.10 -- confirmed via the real API error at
+    the time, not documentation. Re-confirmed against current ragas
+    (0.4.3): that split is gone. Both metrics now read 'reference', so one
+    dataset and one evaluate() call covers both instead of two of each.
     """
     context_text = _render_context(result)
     contexts = [c.strip() for c in context_text.split("<<<DOC") if c.strip()]
@@ -92,24 +133,18 @@ async def check_context_quality(question: str, answer: GeneratedAnswer, result: 
         }
 
     dataset = Dataset.from_dict({
-        "question": [question], "answer": [answer.text],
-        "contexts": [contexts], "reference": [ground_truth],
+        "user_input": [question], "response": [answer.text],
+        "retrieved_contexts": [contexts], "reference": [ground_truth],
     })
-    precision_scores = evaluate(dataset, metrics=[ragas_context_precision])
+    scores = evaluate(dataset, metrics=[ragas_context_precision, ragas_context_recall])
 
-    recall_dataset = Dataset.from_dict({
-        "question": [question], "answer": [answer.text],
-        "contexts": [contexts], "ground_truth": [ground_truth],
-    })
-    recall_scores = evaluate(recall_dataset, metrics=[ragas_context_recall])
-
-    precision = precision_scores["context_precision"][0]
-    recall = recall_scores["context_recall"][0]
+    precision = scores["context_precision"][0]
+    recall = scores["context_recall"][0]
     return {
         "passed": precision >= 0.7,
         "context_precision": precision,
         "context_recall": recall,
-        "note": "Both require ground truth (Ragas API confirmed, not assumed) -- skipped together when expected_answer is absent on the item.",
+        "note": "Both keyed on 'reference' as of ragas 0.4.3 (confirmed via a real run, supersedes D19's two-column-name finding) -- skipped together when expected_answer is absent on the item.",
     }
     
 async def check_date_binding(question: str, answer: GeneratedAnswer, result: RetrievalResult) -> dict:

@@ -11,19 +11,31 @@ steps:
         uv sync -q
         uv run pytest tests/ -x
 
-  - name: 'python:3.12-slim'
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'asia-south1-docker.pkg.dev/$PROJECT_ID/policy-copilot/api:$SHORT_SHA']
+
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     entrypoint: 'bash'
     args:
       - '-c'
       - |
-        # CI gate DISABLED (D52): ci_gate.py imports ragas via checks.py,
-        # but ragas deliberately lives only in .venv-eval (D37-D39 conflict
-        # with langgraph), not main deps. Needs a separate pipeline step
-        # using .venv-eval's dependency set before this can be re-enabled.
-        echo "CI gate skipped -- see DECISIONS.md D52"
-
-  - name: 'gcr.io/cloud-builders/docker'
-    args: ['push', 'asia-south1-docker.pkg.dev/$PROJECT_ID/policy-copilot/api:$SHORT_SHA']
+        # CI gate (D52 resolved, superseded by the ragas/langgraph fix in
+        # evals/runners/_ragas_compat.py): runs evals.runners.ci_gate as a
+        # Cloud Run Job, not a Cloud Build step directly. ragas and
+        # langgraph now coexist in the single main venv (the old
+        # .venv/.venv-eval split from D37-D39 is gone), so this is no
+        # longer about dependency isolation -- it's purely because Cloud
+        # SQL is private-IP only (infra/database.tf) and Cloud Build's
+        # default pool has no VPC access, while this Job does, via the
+        # same connector the API service and ingest job already use.
+        # `--wait` blocks until the job finishes and surfaces its real
+        # exit code (0 pass / 1 fail per ci_gate.py) as this step's status,
+        # so a genuine gate failure stops the pipeline before deploy.
+        gcloud run jobs update policy-copilot-ci-gate \
+          --image=asia-south1-docker.pkg.dev/$PROJECT_ID/policy-copilot/api:$SHORT_SHA \
+          --region=asia-south1
+        gcloud run jobs execute policy-copilot-ci-gate \
+          --region=asia-south1 --wait
 
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     entrypoint: 'gcloud'

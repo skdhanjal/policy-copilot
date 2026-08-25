@@ -972,3 +972,85 @@ correctly retained 100% real traffic, new revision correctly isolated
 at 0% on its own canary URL. This is a complete, safe, real automated
 deployment pipeline -- code push to isolated canary, no manual steps,
 no accidental live traffic exposure.
+
+---
+
+## D54 -- ragas/langgraph two-venv split (D37-D39) superseded: they coexist
+in one venv now, real conflict was upstream and already fixed by version
+Re-investigated D37-D39 rather than assuming they still held. Checked
+PyPI metadata directly: current `ragas` (0.4.3) declares NO version
+constraint on langchain-core/langchain-community at all, unlike the
+`ragas==0.2.10` D37-D39 tested against, which had a real, hard pin.
+`langgraph` 1.2.11 needs `langchain-core>=1.4.7,<2`. With ragas unpinned,
+there is nothing left for a resolver to refuse -- confirmed via
+`uv pip install ragas langgraph` resolving cleanly to one consistent set
+(langchain-core==1.6.0) in a fresh venv.
+
+The only remaining break is a runtime bug, not a resolver conflict:
+`ragas/llms/base.py` unconditionally does `from
+langchain_community.chat_models.vertexai import ChatVertexAI` --
+confirmed still open upstream (vibrantlabsai/ragas #2741, #2745, #2753),
+affects every non-VertexAI user, not fixed in any released version as of
+this writing. Reproduced the exact ModuleNotFoundError on a clean
+install before writing the fix. Since this project never uses VertexAI
+(D18), fixed with a `sys.modules` stub
+(evals/runners/_ragas_compat.py) injected before ragas is ever imported
+-- no upstream dependency, no patched site-packages files.
+
+Two more real breaks found only by actually running the checks, not by
+reading ragas's docs:
+1. `evaluate()`'s dataset schema changed since 0.2.10:
+   question/answer/contexts -> user_input/response/retrieved_contexts.
+   D19's finding that context_precision and context_recall wanted their
+   ground-truth column under two DIFFERENT names ('reference' vs
+   'ground_truth') no longer holds either -- both read 'reference' now,
+   confirmed via a real run, letting evals/runners/checks.py's
+   check_context_quality collapse two evaluate() calls into one.
+2. answer_relevancy's auto-detected default embeddings backend is
+   broken under this ragas version: with no explicit `embeddings=`,
+   evaluate() instantiates ragas's MODERN embeddings provider, but the
+   (still-used, deprecated) legacy `answer_relevancy` metric class calls
+   `.embed_query()`, an interface only the LEGACY `LangchainEmbeddingsWrapper`
+   implements -- throws `AttributeError: 'OpenAIEmbeddings' object has no
+   attribute 'embed_query'`. Fixed by explicitly constructing and passing
+   `LangchainEmbeddingsWrapper(OpenAIEmbeddings())`.
+
+Locking the new dependency set (`uv lock`) surfaced a fourth real
+conflict invisible to ad-hoc `uv pip install` testing: ragas's `instructor`
+dependency caps `openai<3.0.0`; this project pinned `openai>=3.3.1`.
+Relaxed to `openai>=2.0.0,<3.0.0` -- 2.54.0 (what the resolver actually
+picks) was already verified working across every real code path below
+before the pin was changed, so this isn't a speculative downgrade.
+
+Verified end-to-end, not just at the import level:
+- `uv run pytest tests/` -- 4/4 pass in the merged venv.
+- Real langgraph agent loop (build_graph + ainvoke against live
+  checkpointed Postgres) runs correctly in the same process as ragas:
+  grounded, correct cost tracking, correct retry count.
+- Full real `python3 -m evals.runners.ci_gate` run against live
+  Postgres/LiteLLM/OpenAI, all 16 golden-set items: correctly produces
+  `CI GATE: FAIL` on `diachronic-notification-event-001`'s date_binding
+  check at 0% -- confirmed by diffing against the prior baseline report
+  that this is the pre-existing D20 issue, not a regression introduced
+  by this change.
+- Rebuilt the real production Dockerfile (now single-venv again, ragas
+  installs via requirements-docker.txt like everything else,
+  requirements.txt/requirements-docker.txt regenerated via `uv export`)
+  -- image builds clean at 2.68GB (vs. 2.18GB pre-ragas, a ~500MB
+  increase from the langchain/ragas stack, not a regression back to the
+  8.69GB pre-D47 CUDA-torch size).
+- Ran `python3 -m evals.runners.ci_gate` INSIDE that real container
+  image, on the compose network, against live Postgres/Redis/LiteLLM:
+  same correct FAIL result, container exit code confirmed as 1 (what
+  `gcloud run jobs execute --wait` needs to actually block the pipeline).
+- Ran the real API container's `/query` endpoint end-to-end (the
+  LangGraph path, not the eval path): correct grounded answer, correct
+  citations, correct cost.
+
+Net effect: the Cloud Run Job built in the prior session (D52's
+resolution) still exists and is still necessary, but for a narrower
+reason now -- Cloud SQL is private-IP only and Cloud Build's default
+pool has no VPC access, which is unrelated to ragas/langgraph at all.
+The dual-venv image, the `/opt/venv-eval` build stage, and
+scripts/setup_eval_env.sh are gone -- one venv covers both app and eval
+code now.

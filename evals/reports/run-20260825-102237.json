@@ -1,0 +1,543 @@
+{
+  "run_at": "2026-08-25T10:22:37.552361+00:00",
+  "items": [
+    {
+      "id": "point-in-time-001",
+      "category": "lookup",
+      "question": "what does 314.3 require",
+      "n_trials": 1,
+      "pass_rates": {
+        "faithfulness": 1.0,
+        "answer_relevancy": 1.0,
+        "citation_presence": 1.0
+      },
+      "trials": [
+        {
+          "trial": 1,
+          "answer_preview": "Section 314.3 requires the development, implementation, and maintenance of a comprehensive information security program [cite: 314.3(a)]. This program must be written in one or more readily accessible parts and include administrative, technical, and physical safeguards appropriate to the organizatio",
+          "intent": "point_in_time",
+          "checks": {
+            "faithfulness": {
+              "passed": true,
+              "score": 1.0,
+              "note": "CAUTION: faithfulness measures 'is this traceable to context', NOT correctness. Known to score 1.0 on our captured date-misattribution case. A pass here does not mean the answer is factually correct -- pair with date_binding for diachronic questions."
+            },
+            "answer_relevancy": {
+              "passed": "True",
+              "score": 0.8072407387229623,
+              "note": "Measures topical relevance to the question, not factual correctness or groundedness."
+            },
+            "context_quality": {
+              "passed": null,
+              "context_precision": null,
+              "context_recall": null,
+              "note": "skipped -- both context_precision and context_recall require expected_answer/ground_truth on this golden-set item, which is absent"
+            },
+            "citation_presence": {
+              "passed": true,
+              "is_abstention": false,
+              "cited_sections": [
+                "314.3(a)",
+                "314.3(a)",
+                "314.3(a)",
+                "314.3(b)(1)",
+                "314.3(b)(2)",
+                "314.3(b)(3)"
+              ],
+              "unverifiable_citations": [],
+              "note": "Known unreliable even with this fix -- confirmed a real run with correct, substantive content and zero citation tags."
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "diachronic-notification-event-001",
+      "category": "diachronic",
+      "question": "has 314.2 changed since 2023",
+      "n_trials": 3,
+      "pass_rates": {
+        "faithfulness": 0.6666666666666666,
+        "date_binding": 0.0,
+        "citation_presence": 1.0
+      },
+      "trials": [
+        {
+          "trial": 1,
+          "answer_preview": "Yes, \u00a7 314.2 has changed since 2023. The current version effective from May 13, 2024, introduces a new term, \"notification event,\" which is defined as the acquisition of unencrypted customer information without the authorization of the individual to which the information pertains. This term was abse",
+          "intent": "diachronic",
+          "checks": {
+            "faithfulness": {
+              "passed": true,
+              "score": 1.0,
+              "note": "CAUTION: faithfulness measures 'is this traceable to context', NOT correctness. Known to score 1.0 on our captured date-misattribution case. A pass here does not mean the answer is factually correct -- pair with date_binding for diachronic questions."
+            },
+            "date_binding": {
+              "passed": false,
+              "total_date_claims": 4,
+              "suspect_claims": [
+                {
+                  "date": "2023-11-13",
+                  "sentence": "This term was absent in the previous version effective from November 13, 2023."
+                },
+                {
+                  "date": "2023-11-13",
+                  "sentence": "The previous version (effective November 13, 2023) did not include this term or definition."
+                }
+              ],
+              "note": "Flags candidates; verify manually, especially for negation claims ('X was absent')."
+            },
+            "citation_presence": {
+              "passed": true,
+              "is_abstention": false,
+              "cited_sections": [
+                "314.2"
+              ],
+              "unverifiable_citations": [],
+              "note": "Known unreliable even with this fix -- confirmed a real run with correct, substantive content and zero citation tags."
+            }
+          }
+        },
+        {
+          "trial": 2,
+          "answer_preview": "Yes, \u00a7 314.2 has changed since 2023.\n\nHere's a breakdown of the versions and the differences:\n\n**Version 1: Effective from 2021-12-09 (SUPERSEDED)**\nThis version defines:\n*   \"In general\" (referencing 16 CFR part 313) [cite: 314.2(a)]\n*   \"Customer information\" as any record containing nonpublic per",
+          "intent": "diachronic",
+          "checks": {
+            "faithfulness": {
+              "passed": false,
+              "score": NaN,
+              "note": "CAUTION: faithfulness measures 'is this traceable to context', NOT correctness. Known to score 1.0 on our captured date-misattribution case. A pass here does not mean the answer is factually correct -- pair with date_binding for diachronic questions."
+            },
+            "date_binding": {
+              "passed": false,
+              "total_date_claims": 13,
+              "suspect_claims": [
+                {
+                  "date": "2021-12-09",
+                  "sentence": "Here's a breakdown of the versions and the differences:\n\n**Version 1: Effective from 2021-12-09 (SUPERSEDED)**\nThis version defines:\n*   \"In general\" "
+                },
+                {
+                  "date": "2022-01-07",
+                  "sentence": "Here's a breakdown of the versions and the differences:\n\n**Version 1: Effective from 2021-12-09 (SUPERSEDED)**\nThis version defines:\n*   \"In general\" "
+                },
+                {
+                  "date": "2022-11-23",
+                  "sentence": "**Version 3: Effective from 2022-11-23 (SUPERSEDED)**\nThis version is identical to the version effective from 2022-01-07."
+                },
+                {
+                  "date": "2022-01-07",
+                  "sentence": "**Version 3: Effective from 2022-11-23 (SUPERSEDED)**\nThis version is identical to the version effective from 2022-01-07."
+                },
+                {
+                  "date": "2023-11-13",
+                  "sentence": "**Version 4: Effective from 2023-11-13 (SUPERSEDED)**\nThis version is identical to the version effective from 2022-01-07 and 2022-11-23."
+                },
+                {
+                  "date": "2022-01-07",
+                  "sentence": "**Version 4: Effective from 2023-11-13 (SUPERSEDED)**\nThis version is identical to the version effective from 2022-01-07 and 2022-11-23."
+                },
+                {
+                  "date": "2022-11-23",
+                  "sentence": "**Version 4: Effective from 2023-11-13 (SUPERSEDED)**\nThis version is identical to the version effective from 2022-01-07 and 2022-11-23."
+                },
+                {
+                  "date": "2024-05-13",
+                  "sentence": "**Version 5: Effective from 2024-05-13 (IN FORCE)**\nThis is the currently in force version."
+                },
+                {
+                  "date": "2022-01-07",
+                  "sentence": "The difference between this version and the previous versions (effective 2022-01-07, 2022-11-23, and 2023-11-13) is the introduction of a new definiti"
+                },
+                {
+                  "date": "2022-11-23",
+                  "sentence": "The difference between this version and the previous versions (effective 2022-01-07, 2022-11-23, and 2023-11-13) is the introduction of a new definiti"
+                },
+                {
+                  "date": "2023-11-13",
+                  "sentence": "The difference between this version and the previous versions (effective 2022-01-07, 2022-11-23, and 2023-11-13) is the introduction of a new definiti"
+                },
+                {
+                  "date": "2024-05-13",
+                  "sentence": "The version effective from 2024-05-13 introduced the definition of \"Notification event\" and re-lettered subsequent definitions."
+                },
+                {
+                  "date": "2024-05-13",
+                  "sentence": "The version effective from 2024-05-13 is currently in force."
+                }
+              ],
+              "note": "Flags candidates; verify manually, especially for negation claims ('X was absent')."
+            },
+            "citation_presence": {
+              "passed": true,
+              "is_abstention": false,
+              "cited_sections": [
+                "314.2(a)",
+                "314.2(b)",
+                "314.2(c)",
+                "314.2(d)",
+                "314.2(a)",
+                "314.2(b)",
+                "314.2(c)",
+                "314.2(e)",
+                "314.2(f)",
+                "314.2(g)",
+                "314.2(h)",
+                "314.2(j)",
+                "314.2(k)",
+                "314.2(l)",
+                "314.2(m)",
+                "314.2(n)",
+                "314.2(o)",
+                "314.2(p)",
+                "314.2(r)",
+                "314.2(d)",
+                "314.2(i)",
+                "314.2(q)",
+                "314.2(m)",
+                "314.2(n)",
+                "314.2(o)",
+                "314.2(p)",
+                "314.2(q)",
+                "314.2(r)",
+                "314.2(s)"
+              ],
+              "unverifiable_citations": [],
+              "note": "Known unreliable even with this fix -- confirmed a real run with correct, substantive content and zero citation tags."
+            }
+          }
+        },
+        {
+          "trial": 3,
+          "answer_preview": "Yes, \u00a7 314.2 has changed since 2023. \n\nThe version effective from November 13, 2023, introduced a new term: \"notification event,\" which is defined as the acquisition of unencrypted customer information without the authorization of the individual to which the information pertains. This term was absen",
+          "intent": "diachronic",
+          "checks": {
+            "faithfulness": {
+              "passed": true,
+              "score": 0.9,
+              "note": "CAUTION: faithfulness measures 'is this traceable to context', NOT correctness. Known to score 1.0 on our captured date-misattribution case. A pass here does not mean the answer is factually correct -- pair with date_binding for diachronic questions."
+            },
+            "date_binding": {
+              "passed": false,
+              "total_date_claims": 6,
+              "suspect_claims": [
+                {
+                  "date": "2023-11-13",
+                  "sentence": "The version effective from November 13, 2023, introduced a new term: \"notification event,\" which is defined as the acquisition of unencrypted customer"
+                },
+                {
+                  "date": "2022-11-23",
+                  "sentence": "This term was absent in the previous version effective from November 23, 2022."
+                },
+                {
+                  "date": "2023-11-13",
+                  "sentence": "To summarize:\n- **Version effective from November 13, 2023**: Introduced \"notification event.\"\n- **Version effective from May 13, 2024**: Retains \"not"
+                },
+                {
+                  "date": "2024-05-13",
+                  "sentence": "To summarize:\n- **Version effective from November 13, 2023**: Introduced \"notification event.\"\n- **Version effective from May 13, 2024**: Retains \"not"
+                },
+                {
+                  "date": "2022-11-23",
+                  "sentence": "The previous version (November 23, 2022) did not include \"notification event.\" [cite: 314.2]"
+                }
+              ],
+              "note": "Flags candidates; verify manually, especially for negation claims ('X was absent')."
+            },
+            "citation_presence": {
+              "passed": true,
+              "is_abstention": false,
+              "cited_sections": [
+                "314.2"
+              ],
+              "unverifiable_citations": [],
+              "note": "Known unreliable even with this fix -- confirmed a real run with correct, substantive content and zero citation tags."
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "adversarial-citation-priority-001",
+      "category": "adversarial",
+      "question": "has 314.2 changed since 2023",
+      "n_trials": 1,
+      "pass_rates": {
+        "citation_coverage": 1.0
+      },
+      "trials": [
+        {
+          "trial": 1,
+          "answer_preview": "Yes, \u00a7 314.2 has changed since 2023.\n\nHere's a breakdown of the versions and the differences:\n\n**Version 1: Effective from 2021-12-09 (SUPERSEDED)**\nThis version defines:\n*   \"In general\" (referencing 16 CFR part 313) [cite: 314.2(a)]\n*   \"Customer information\" as any record containing nonpublic per",
+          "intent": "diachronic",
+          "checks": {
+            "citation_coverage": {
+              "passed": true,
+              "cited_in_question": [
+                "314.2"
+              ],
+              "found_in_retrieval": [
+                "314.2"
+              ],
+              "missing": []
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "unanswerable-pre-window-001",
+      "category": "unanswerable",
+      "question": "how has 12 CFR 1005.18's payroll card provisions changed in the last two years",
+      "n_trials": 1,
+      "pass_rates": {
+        "faithfulness": 0.0
+      },
+      "trials": [
+        {
+          "trial": 1,
+          "answer_preview": "The section 12 CFR 1005.18 has undergone no changes in its provisions regarding payroll cards over the last two years. All five versions of this section, effective on the dates 2020-07-21, 2023-03-20, 2023-04-19, 2024-12-30, and 2025-10-01, contain byte-for-byte identical text. Therefore, there are ",
+          "intent": "diachronic",
+          "checks": {
+            "faithfulness": {
+              "passed": false,
+              "score": 0.5,
+              "note": "CAUTION: faithfulness measures 'is this traceable to context', NOT correctness. Known to score 1.0 on our captured date-misattribution case. A pass here does not mean the answer is factually correct -- pair with date_binding for diachronic questions."
+            },
+            "abstention": {
+              "passed": null,
+              "hedged": true,
+              "note": "Informational only. Check against the item's expected_outcome manually."
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "diachronic-section-reorg-001",
+      "category": "diachronic",
+      "question": "did 17 CFR 275.211(h) get removed",
+      "n_trials": 1,
+      "pass_rates": {
+        "citation_presence": 1.0
+      },
+      "trials": [
+        {
+          "trial": 1,
+          "answer_preview": "The provided documents do not contain any information about the removal of 17 CFR 275.211(h). The documents show that sections 275.204-2(a)(7)(v), 275.204-2(a)(20)(i), 275.204-2(a)(22), 275.204-2(a)(23), and 275.204-2(a)(24) refer to various parts of 275.211(h), but they do not indicate whether the ",
+          "intent": "diachronic",
+          "checks": {
+            "abstention": {
+              "passed": null,
+              "hedged": true,
+              "note": "Informational only. Check against the item's expected_outcome manually."
+            },
+            "citation_presence": {
+              "passed": true,
+              "is_abstention": true,
+              "cited_sections": [],
+              "unverifiable_citations": [],
+              "note": "Known unreliable even with this fix -- confirmed a real run with correct, substantive content and zero citation tags."
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "hallucination-fabricated-comparison-001",
+      "category": "diachronic",
+      "question": "how has 12 CFR 1005.18's payroll card provisions changed in the last two years",
+      "n_trials": 1,
+      "pass_rates": {
+        "faithfulness": 0.0,
+        "date_binding": 1.0
+      },
+      "trials": [
+        {
+          "trial": 1,
+          "answer_preview": "All five versions of 12 CFR 1005.18, with effective dates including 2023-03-20 and 2023-04-19 (which fall within the last two years), contain byte-for-byte identical text. This means that no content change has occurred across this span [cite: 1005.18].\n\nTherefore, the payroll card provisions within ",
+          "intent": "diachronic",
+          "checks": {
+            "faithfulness": {
+              "passed": false,
+              "score": NaN,
+              "note": "CAUTION: faithfulness measures 'is this traceable to context', NOT correctness. Known to score 1.0 on our captured date-misattribution case. A pass here does not mean the answer is factually correct -- pair with date_binding for diachronic questions."
+            },
+            "date_binding": {
+              "passed": true,
+              "total_date_claims": 2,
+              "suspect_claims": [],
+              "note": "Flags candidates; verify manually, especially for negation claims ('X was absent')."
+            },
+            "abstention": {
+              "passed": null,
+              "hedged": false,
+              "note": "Informational only. Check against the item's expected_outcome manually."
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "citation-format-unreliable-001",
+      "category": "diachronic",
+      "question": "has 314.2 changed since 2023",
+      "n_trials": 1,
+      "pass_rates": {
+        "citation_presence": 1.0
+      },
+      "trials": [
+        {
+          "trial": 1,
+          "answer_preview": "Yes, \u00a7 314.2 has changed since 2023. The current version, effective from May 13, 2024, introduces a new term: \"notification event,\" which is defined as the acquisition of unencrypted customer information without the authorization of the individual to which the information pertains. This term was abs",
+          "intent": "diachronic",
+          "checks": {
+            "citation_presence": {
+              "passed": true,
+              "is_abstention": false,
+              "cited_sections": [
+                "314.2"
+              ],
+              "unverifiable_citations": [],
+              "note": "Known unreliable even with this fix -- confirmed a real run with correct, substantive content and zero citation tags."
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "multi-policy-custody-safeguards-001",
+      "category": "multi_policy",
+      "question": "What security and safeguarding obligations apply to a registered investment adviser handling customer financial data?",
+      "n_trials": 1,
+      "pass_rates": {},
+      "trials": [
+        {
+          "trial": 1,
+          "answer_preview": "The provided documents do not contain information about security and safeguarding obligations for a registered investment adviser handling customer financial data. The documents discuss:\n\n*   **Investment adviser codes of ethics** (\u00a7 275.204A-1), which require provisions for supervised persons to co",
+          "intent": "point_in_time",
+          "checks": {}
+        }
+      ]
+    },
+    {
+      "id": "multi-policy-recordkeeping-comparison-001",
+      "category": "multi_policy",
+      "question": "How do recordkeeping requirements differ between investment advisers and financial institutions under Reg E?",
+      "n_trials": 1,
+      "pass_rates": {},
+      "trials": [
+        {
+          "trial": 1,
+          "answer_preview": "The provided documents pertain to the recordkeeping requirements for investment advisers under 17 CFR 275.204-2. They do not contain any information about recordkeeping requirements for financial institutions under Regulation E. Therefore, I cannot answer how these requirements differ.",
+          "intent": "diachronic",
+          "checks": {}
+        }
+      ]
+    },
+    {
+      "id": "multi-policy-overlap-abstention-001",
+      "category": "multi_policy",
+      "question": "If a firm is both an investment adviser and handles electronic fund transfers, what compliance obligations overlap?",
+      "n_trials": 1,
+      "pass_rates": {},
+      "trials": [
+        {
+          "trial": 1,
+          "answer_preview": "The provided documents cover two distinct areas of US financial-services regulations: electronic fund transfers (Regulation E) and investment adviser compliance. While both aim to protect consumers/clients, the specific compliance obligations outlined in these documents do not directly overlap but r",
+          "intent": "diachronic",
+          "checks": {}
+        }
+      ]
+    },
+    {
+      "id": "historical-safeguards-2022-001",
+      "category": "historical",
+      "question": "What did the FTC Safeguards Rule require as of January 2022?",
+      "n_trials": 1,
+      "pass_rates": {},
+      "trials": [
+        {
+          "trial": 1,
+          "answer_preview": "The provided documents do not contain information about what the FTC Safeguards Rule required as of January 2022.\n\nThe earliest effective date for any of the provided sections is November 23, 2022, for the superseded versions of \u00a7 314.1 and \u00a7 314.4 [cite: 314.1, 314.4]. The superseded \u00a7 314.5 states",
+          "intent": "historical",
+          "checks": {}
+        }
+      ]
+    },
+    {
+      "id": "historical-recordkeeping-2023-001",
+      "category": "historical",
+      "question": "As of 2023, what were the recordkeeping requirements for investment advisers?",
+      "n_trials": 1,
+      "pass_rates": {},
+      "trials": [
+        {
+          "trial": 1,
+          "answer_preview": "As of 2023, investment advisers registered or required to be registered under section 203 of the Act must make and keep true, accurate, and current specific books and records relating to their investment advisory business [cite: 275.204-2(a)].\n\nThese records include:\n*   Journals, including cash rec",
+          "intent": "historical",
+          "checks": {}
+        }
+      ]
+    },
+    {
+      "id": "historical-section-lookup-2021-001",
+      "category": "historical",
+      "question": "What was section 314.2 in force in 2021?",
+      "n_trials": 1,
+      "pass_rates": {},
+      "trials": [
+        {
+          "trial": 1,
+          "answer_preview": "The version of section 314.2 in force in 2021, effective from December 9, 2021, defined the following terms:\n\n*   **(a) In general:** Except as modified by this part or unless the context otherwise requires, the terms used in this part have the same meaning as set forth in the Commission's rule gove",
+          "intent": "historical",
+          "checks": {}
+        }
+      ]
+    },
+    {
+      "id": "lookup-classifier-lexical-gap-001",
+      "category": "lookup",
+      "question": "Who qualifies as a service provider under 16 CFR 314?",
+      "n_trials": 1,
+      "pass_rates": {},
+      "trials": [
+        {
+          "trial": 1,
+          "answer_preview": "The provided documents do not contain a definition for \"service provider\" under 16 CFR 314.\n\nHowever, the term is used in the context of designating a Qualified Individual for an information security program. A financial institution may use a service provider to fulfill the role of the Qualified Ind",
+          "intent": "point_in_time",
+          "checks": {}
+        }
+      ]
+    },
+    {
+      "id": "lookup-classifier-lexical-gap-002",
+      "category": "lookup",
+      "question": "What error resolution procedures apply to electronic fund transfers?",
+      "n_trials": 1,
+      "pass_rates": {},
+      "trials": [
+        {
+          "trial": 1,
+          "answer_preview": "The error resolution procedures for electronic fund transfers (EFTs) are primarily governed by \u00a7 1005.11 of Regulation E. Here\u2019s a summary of the relevant sections:\n\n1. **Definition of Error**: \n   - An \"error\" includes various types of issues such as unauthorized electronic fund transfers, incorrec",
+          "intent": "point_in_time",
+          "checks": {}
+        }
+      ]
+    },
+    {
+      "id": "lookup-resolve-padding-001",
+      "category": "lookup",
+      "question": "What is the definition of customer information under the Safeguards Rule?",
+      "n_trials": 1,
+      "pass_rates": {},
+      "trials": [
+        {
+          "trial": 1,
+          "answer_preview": "The system is currently rate-limited or over budget. Please try again shortly.",
+          "intent": "point_in_time",
+          "checks": {}
+        }
+      ]
+    }
+  ]
+}

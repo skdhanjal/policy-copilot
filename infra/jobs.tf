@@ -73,6 +73,94 @@ resource "google_cloud_run_v2_job" "ingest" {
   }
 }
 
+resource "google_cloud_run_v2_job" "ci_gate" {
+  name       = "policy-copilot-ci-gate"
+  location   = var.region
+  depends_on = [google_artifact_registry_repository.docker_repo]
+
+  template {
+    template {
+      vpc_access {
+        connector = google_vpc_access_connector.connector.id
+        egress    = "PRIVATE_RANGES_ONLY"
+      }
+
+      containers {
+        # Same api:* image as the service, single venv -- ragas and
+        # langgraph now coexist in it (see evals/runners/_ragas_compat.py,
+        # which supersedes the two-venv split from DECISIONS.md D37-D39).
+        # This Job still exists because Cloud SQL is private-IP only and
+        # Cloud Build's default pool has no VPC access; that part of the
+        # problem is unrelated to the dependency conflict and remains.
+        # Cloud Build repoints this to the real :$SHORT_SHA tag before each
+        # execution (gcloud run jobs update --image=...); this v1 tag is a
+        # placeholder, same accepted drift pattern as services.tf (D52).
+        image   = "${var.region}-docker.pkg.dev/${var.project_id}/${google_artifact_registry_repository.docker_repo.repository_id}/api:v1"
+        command = ["python3", "-m", "evals.runners.ci_gate"]
+
+        resources {
+          limits = {
+            memory = "2Gi"
+            cpu    = "2000m"
+          }
+        }
+
+        env {
+          name  = "POSTGRES_DSN"
+          value = "postgresql://copilot:${var.db_password}@${google_sql_database_instance.main.private_ip_address}:5432/copilot"
+        }
+        env {
+          name  = "REDIS_DSN"
+          value = "redis://${google_redis_instance.cache.host}:6379/0"
+        }
+        env {
+          name  = "GATEWAY_BASE_URL"
+          value = google_cloud_run_v2_service.litellm.uri
+        }
+        env {
+          name  = "GATEWAY_APP_KEY"
+          value_source {
+            secret_key_ref {
+              secret  = google_secret_manager_secret.litellm_master_key.secret_id
+              version = "latest"
+            }
+          }
+        }
+        env {
+          name  = "LITELLM_MASTER_KEY"
+          value_source {
+            secret_key_ref {
+              secret  = google_secret_manager_secret.litellm_master_key.secret_id
+              version = "latest"
+            }
+          }
+        }
+        env {
+          name  = "OPENAI_API_KEY"
+          value_source {
+            secret_key_ref {
+              secret  = google_secret_manager_secret.openai_api_key.secret_id
+              version = "latest"
+            }
+          }
+        }
+        env {
+          name  = "GEMINI_API_KEY"
+          value_source {
+            secret_key_ref {
+              secret  = google_secret_manager_secret.gemini_api_key.secret_id
+              version = "latest"
+            }
+          }
+        }
+      }
+
+      max_retries = 0
+      timeout     = "900s"
+    }
+  }
+}
+
 resource "google_cloud_run_v2_job" "schema_setup" {
   name       = "policy-copilot-schema-setup"
   location   = var.region
