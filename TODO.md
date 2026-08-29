@@ -1,0 +1,69 @@
+# Outstanding work tracker
+
+Derived from a full audit of DESIGN.md's phase roadmap against DECISIONS.md
+(D1-D55), current Terraform state, cloudbuild.yaml, and the golden set
+(2026-08-29). Superseded D46's stale tracker. Work top to bottom within each
+tier; re-prioritize freely as items get fixed or new gaps surface.
+
+Status legend: `[ ]` not started, `[~]` in progress, `[x]` done.
+
+## P0 -- correctness / security, blocks calling this production-ready
+
+- [ ] **1. D20 grounding bug**: diachronic date-attribution hallucination.
+  Agent retry loop (Phase 7) detects it (`agent_grounded: false`) but
+  cannot reliably fix it within `MAX_RETRIES=2`. Root cause still open.
+- [ ] **2. Ingest path is broken-as-deployed**: `infra/jobs.tf`'s
+  `google_cloud_run_v2_job.ingest` cannot actually run -- eCFR blocks
+  Cloud Run's outbound IP range (D49). Real ingest path is a manual
+  Cloud SQL proxy tunnel from a local machine, which temporarily makes
+  the DB publicly reachable (password-only). Either fix Terraform to stop
+  implying an unusable automated path exists, or solve the IP-block
+  problem for real (e.g. Cloud NAT with a static egress IP, if eCFR would
+  allowlist it).
+- [ ] **3. LiteLLM gateway has no real service-to-service auth**: made fully
+  public (`allUsers` + `run.invoker`) as a workaround (D50) instead of
+  fetching a Google identity token in `generate.py`. Protected only by
+  `LITELLM_MASTER_KEY`. Fix before any real production traffic.
+
+## P1 -- eval/pipeline completeness (can't trust the numbers yet)
+
+- [ ] **4. Golden set stuck at 16/50 items**; grow toward the original target.
+- [ ] **5. Judge calibration never done** (Cohen's kappa between the LLM judge
+  and a human rater) -- no confidence in how much to trust ragas scores.
+- [ ] **6. 3 golden-set items with generation never actually verified**
+  (retrieval-only, marked TODO in `evals/datasets/golden_set.yaml`):
+  `lookup-classifier-lexical-gap-001`, `lookup-classifier-lexical-gap-002`,
+  `lookup-resolve-padding-001`. Re-run once API access/budget allows, then
+  upgrade `severity` if any answer is actually wrong.
+- [ ] **7. Citation-format compliance**: model inconsistently emits the
+  `[cite: ...]` tag format the system prompt asks for. Currently caught
+  (`unverifiable_citations`) but not corrected -- decide whether to fix
+  via prompt, post-processing, or accept as a known limitation.
+
+## P2 -- production hardening / observability (Phase 8 leftovers)
+
+- [ ] **8. No rollback trigger, dashboards, or alerts.** `cloudbuild.yaml`
+  deploys to a `--tag=canary` revision with `--no-traffic` but nothing
+  automates promotion or rollback, and there's no monitoring on top of
+  Cloud Run's defaults.
+- [ ] **9. Phase 5 latency work never re-measured against real cloud infra**
+  (D50) -- only ever benchmarked locally; cold starts, VPC connector
+  hops, and cross-service network time are unquantified in production.
+
+## P3 -- housekeeping
+
+- [ ] **10.** Commit `CLAUDE.md` (currently untracked in git).
+- [ ] **11.** Resolve the `litellm.Dockerfile` working-tree diff (line-ending
+  only, CRLF vs LF) -- either normalize and commit or discard.
+
+## Already verified fixed (no action needed, listed so we don't re-litigate)
+
+- [x] D21's three batched gaps -- Reg E/nickname matching
+  (`app/rag/retrieval.py`), cross-family synthesis abstention and
+  HISTORICAL intent branch (`app/rag/intent.py`, `app/rag/generate.py`)
+  all confirmed present in current code.
+- [x] CI gate re-enabled in the pipeline (D54) -- runs as a real Cloud Run
+  Job step in `cloudbuild.yaml`, not disabled/placeholder.
+- [x] API service Cloud Run Terraform resource, schema-apply automation,
+  README, architecture diagram -- all exist despite D46 listing them as
+  gaps (that tracker predates them).
