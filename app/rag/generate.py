@@ -16,8 +16,10 @@ first place that boundary actually does its job, not just documents intent.
 from __future__ import annotations
 
 import re
+import time
 from dataclasses import dataclass, field
 
+import httpx
 from openai import AsyncOpenAI, RateLimitError
 from app.core.config import get_settings
 from app.rag.retrieval import RetrievalResult
@@ -27,6 +29,71 @@ from app.rag.cache import get_cached_answer, set_cached_answer
 from app.guardrails.pii import check_output_pii_leak
 
 _OPEN, _CLOSE = "<<<DOC", "DOC>>>"
+
+# Cloud Run's own IAM check reads a caller's identity from
+# X-Serverless-Authorization specifically so an app can keep using
+# Authorization for its own auth (LiteLLM's virtual/master key here) --
+# confirmed against Google's docs after finding empirically that a Google
+# ID token placed in Authorization gets rejected by LiteLLM itself before
+# the request ever benefits from Cloud Run's IAM layer (DECISIONS.md, the
+# gateway-exposure investigation). Only relevant once the gateway's IAM
+# invoker is actually restricted (see infra/iam.tf's `litellm_public`) --
+# until then this just never finds a metadata server and no-ops.
+_METADATA_IDENTITY_URL = (
+    "http://metadata.google.internal/computeMetadata/v1/instance/"
+    "service-accounts/default/identity"
+)
+# Google's metadata-server ID tokens are valid ~1h; refresh with margin
+# rather than re-fetching (and adding a metadata-server round trip) on
+# every single request on this hot path.
+_ID_TOKEN_TTL_S = 50 * 60
+_id_token_cache: dict[str, tuple[str, float]] = {}
+
+
+async def _fetch_identity_token(audience: str) -> str | None:
+    """Google-issued ID token scoped to `audience` (the gateway's own URL),
+    for Cloud Run's X-Serverless-Authorization header. Returns None -- not
+    an error -- when no metadata server answers, which is the normal case
+    for local dev against docker-compose's unauthenticated litellm; the
+    caller simply omits the header and behaves exactly as it does today.
+    """
+    now = time.monotonic()
+    cached = _id_token_cache.get(audience)
+    if cached is not None and (now - cached[1]) < _ID_TOKEN_TTL_S:
+        return cached[0]
+
+    try:
+        async with httpx.AsyncClient(timeout=2.0) as client:
+            resp = await client.get(
+                _METADATA_IDENTITY_URL,
+                params={"audience": audience},
+                headers={"Metadata-Flavor": "Google"},
+            )
+            resp.raise_for_status()
+    except httpx.HTTPError:
+        return None
+
+    token = resp.text
+    _id_token_cache[audience] = (token, now)
+    return token
+
+
+async def _build_gateway_client() -> AsyncOpenAI:
+    """The one place an OpenAI-SDK client pointed at the LiteLLM gateway
+    gets constructed -- both generate() and generate_stream() go through
+    this so the identity-token attachment can't drift between them.
+    """
+    settings = get_settings()
+    id_token = await _fetch_identity_token(settings.gateway_base_url)
+    default_headers = (
+        {"X-Serverless-Authorization": f"Bearer {id_token}"} if id_token else {}
+    )
+    return AsyncOpenAI(
+        api_key=settings.gateway_app_key,
+        base_url=f"{settings.gateway_base_url}/v1",
+        max_retries=0,
+        default_headers=default_headers,
+    )
 
 _SYSTEM_PROMPT = f"""You answer questions about US financial-services regulations using
 only the documents provided.
@@ -133,7 +200,6 @@ async def generate(result: RetrievalResult, question: str,  redis: Redis | None 
     for why keying on question text alone would silently serve stale
     answers after a corpus update.
     """
-    settings = get_settings()
     if redis is not None:
         cached = await get_cached_answer(redis, question, result)
         if cached is not None:
@@ -146,13 +212,9 @@ async def generate(result: RetrievalResult, question: str,  redis: Redis | None 
     # Points at the LiteLLM gateway, not OpenAI directly. Same SDK, because
     # LiteLLM speaks the OpenAI API format regardless of which real provider
     # it routes to underneath -- this is ADR-4 (DESIGN.md): application code
-    # never names a vendor, only an alias ("fast").       
-    client = AsyncOpenAI(
-        api_key=settings.gateway_app_key,
-        base_url=f"{settings.gateway_base_url}/v1",
-        max_retries=0,
-    )
-    
+    # never names a vendor, only an alias ("fast").
+    client = await _build_gateway_client()
+
     context = _render_context(result)
     if not context.strip():
         return GeneratedAnswer(
@@ -230,12 +292,7 @@ async def generate_stream(result: RetrievalResult, question: str):
     pass of ADR-10 -- sentence buffering only, no tier-1/tier-2 validation
     yet (needs API/SSE layer, not built). No caching, no citation
     verification -- opt-in, separate from generate()."""
-    settings = get_settings()
-    client = AsyncOpenAI(
-        api_key=settings.gateway_app_key,
-        base_url=f"{settings.gateway_base_url}/v1",
-        max_retries=0,
-    )
+    client = await _build_gateway_client()
     context = _render_context(result)
     if not context.strip():
         yield "No relevant documents were found for this question."

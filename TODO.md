@@ -27,10 +27,18 @@ Status legend: `[ ]` not started, `[~]` in progress, `[x]` done.
   implying an unusable automated path exists, or solve the IP-block
   problem for real (e.g. Cloud NAT with a static egress IP, if eCFR would
   allowlist it).
-- [ ] **3. LiteLLM gateway has no real service-to-service auth**: made fully
-  public (`allUsers` + `run.invoker`) as a workaround (D50) instead of
-  fetching a Google identity token in `generate.py`. Protected only by
-  `LITELLM_MASTER_KEY`. Fix before any real production traffic.
+- [~] **3. LiteLLM gateway has no real service-to-service auth**: made fully
+  public (`allUsers` + `run.invoker`) as a workaround (D50). Investigated
+  (D57): the originally-planned identity-token fix was structurally
+  broken (Cloud Run IAM and LiteLLM's own key both wanted the
+  `Authorization` header), and internal-only ingress needs real VPC/DNS
+  work with genuinely conflicting requirements across sources. Found the
+  real fix instead -- Cloud Run's `X-Serverless-Authorization` header,
+  which lets the identity token and LiteLLM's key coexist. **Code done**:
+  `app/rag/generate.py` fetches and attaches the token, no-ops locally.
+  **Still pending**: restrict `infra/iam.tf`'s `litellm_public` binding
+  away from `allUsers` and live-test against the deployed `/query`
+  endpoint -- deliberately not applied blind this session.
 
 ## P1 -- eval/pipeline completeness (can't trust the numbers yet)
 

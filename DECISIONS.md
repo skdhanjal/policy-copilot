@@ -1202,3 +1202,82 @@ more often within the existing retry budget.
 
 D46's remaining-work item 9 ("D20's underlying grounding bug still open")
 should be read as narrowed by this entry, not closed by it.
+
+---
+
+## D57 -- LiteLLM gateway auth: both documented fixes investigated, one found
+broken, one found real but bigger than expected; code half landed, infra
+deferred
+D50 left two options on the table for closing the "LiteLLM is permanently
+public" gap: (a) fetch a Google identity token in generate.py, or (b)
+switch to internal-only ingress. Neither was as simple as D50 assumed.
+
+**(a) tested directly against the live gateway, found structurally
+broken, not just undesirable.** Cloud Run's IAM layer and LiteLLM's own
+key both want the `Authorization` header. Confirmed via curl against the
+real running LiteLLM: with a bogus value in `Authorization` and the real
+master key in a fallback `api-key` header, the request still 401s --
+`api-key` is a real LiteLLM fallback (confirmed separately: it works when
+`Authorization` is absent entirely), but LiteLLM checks `Authorization`
+first whenever it's present and never falls through. Since Cloud Run's
+proxy passes an identity token straight through to the container
+unchanged, LiteLLM would receive that token in `Authorization`, reject it
+as not a recognized key, and fail -- before the request gets anywhere
+near being "authenticated by Cloud Run first, then LiteLLM."
+
+**(b) researched against Google's own docs and real-world LiteLLM-on-
+Cloud-Run deployments** (Cyclenerd/google-cloud-litellm-proxy, RAD
+Platform's docs). Finding: "public + master key" is the actual common
+pattern other people ship, not a mistake unique to this project.
+Internal-only ingress is the documented right answer, but Cloud-Run-to-
+Cloud-Run calls only count as "internal" if the caller routes through
+the VPC with `all-traffic` egress (not the `private-ranges-only` this
+project already uses) AND the target hostname resolves privately, which
+sources genuinely disagree on the minimum requirement for (a private DNS
+zone override per Google's own page vs. "Private Google Access on the
+subnet alone" per a practitioner writeup) -- and this project's older
+connector-based VPC access (not the newer Direct VPC egress most current
+examples use) makes it unclear which answer even applies here. Real
+infra work, not a Terraform field flip, on a project with live deployed
+traffic.
+
+**Found the actual fix while re-examining (a) rather than abandoning it
+for (b): `X-Serverless-Authorization`.** Confirmed against Google's own
+docs: Cloud Run's IAM layer will read the identity token from this
+header specifically *instead of* `Authorization` when both are present
+-- documented for exactly this situation ("if your application already
+uses the Authorization header for custom authorization"). Google's edge
+also strips the token's signature before forwarding it to the container,
+so verification happens entirely at Cloud Run's infrastructure layer;
+LiteLLM never needs to know the header exists. This closes the actual
+gap (IAM invoker enforcement, not just a network path) without any of
+option (b)'s VPC/DNS uncertainty, and without a custom auth hook inside
+LiteLLM.
+
+**Landed this session:** `app/rag/generate.py` -- `_fetch_identity_token`
+(metadata-server call, ~50min in-memory cache, returns `None` and no-ops
+when no metadata server answers, which is the normal case for local dev
+against docker-compose's unauthenticated litellm) and
+`_build_gateway_client` (the one place the gateway-facing AsyncOpenAI
+client is built now, used by both `generate()` and `generate_stream()`,
+attaching `X-Serverless-Authorization` only when a token was actually
+obtained). Verified: `uv run pytest tests/` 4/4 pass; a real local run
+confirmed `_fetch_identity_token` correctly returns `None` against
+docker-compose (no metadata server) and a real `models.list()` call
+through the shared builder still succeeds unchanged.
+
+**Deliberately not done yet:** `infra/iam.tf`'s `litellm_public` binding
+still grants `allUsers` -- this code is inert (no metadata server to
+find outside real Cloud Run) until that binding is restricted to the
+service account API/ci_gate actually run under. That Terraform change,
+plus a live smoke test against the deployed `/query` endpoint, is
+deferred to a separate session rather than applied blind. Unlike option
+(b), this doesn't touch ingress, egress, VPC connectors, or DNS at all --
+IAM invoker enforcement applies to every request reaching a Cloud Run
+service regardless of network path, so the fix is genuinely just the IAM
+binding plus this code, not new networking infrastructure.
+
+Also out of scope: `app/gateway/admin_client.py` (the human-run CLI) has
+no service identity to borrow and would need its own answer (most likely
+`gcloud run services proxy`, which injects the operator's own gcloud
+credentials) once the invoker binding is actually restricted.
