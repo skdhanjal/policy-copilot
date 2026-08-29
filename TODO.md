@@ -52,9 +52,12 @@ Status legend: `[ ]` not started, `[~]` in progress, `[x]` done.
 
 ## P3 -- housekeeping
 
-- [ ] **10.** Commit `CLAUDE.md` (currently untracked in git).
-- [ ] **11.** Resolve the `litellm.Dockerfile` working-tree diff (line-ending
-  only, CRLF vs LF) -- either normalize and commit or discard.
+- [x] **10.** `CLAUDE.md` -- decided to keep it local rather than commit;
+  added to `.gitignore` instead.
+- [x] **11.** Root `litellm.Dockerfile` was an orphaned duplicate (never
+  referenced by any build step -- `cloudbuild-litellm.yaml` builds from
+  `infra/litellm.Dockerfile` via `dir: infra`). Removed; only the
+  `infra/` copy remains.
 
 ## Already verified fixed (no action needed, listed so we don't re-litigate)
 
