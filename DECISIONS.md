@@ -1115,3 +1115,90 @@ with a real install of the un-stripped requirements.txt, header intact,
 producing an identical result). Keeping two hash-pinned files in sync
 by hand was pure drift risk with nothing left for it to actually solve
 -- Dockerfile now installs directly from requirements.txt.
+
+---
+
+## D56 -- D20's retry loop actually targeted, not just present; real
+improvement verified live, one residual heuristic gap left open, not hidden
+**Root cause found, not previously diagnosed:** `check_node`
+(grounding_loop.py) already computed exactly which sentence was
+misattributed and to which wrong date, then threw that detail away and
+returned only a boolean. `generate_node`'s retry appended a static,
+generic warning regardless of what actually went wrong -- this, not
+model non-determinism alone, is why the original fix (D20) only helped
+~1/3 of the time. Fixed: `suspect_bindings` now flows through
+`AgentState` into `_build_retry_question`, which quotes the actual
+flagged sentence and, when determinable, the version it really belongs
+to.
+
+**check_date_bindings (eval_metrics.py) had four compounding bugs,
+found only by testing against real captured model output, not by
+inspection:**
+1. Sentence-splitting only broke on `. ! ?`, so a bulleted multi-version
+   answer (the model's default style for these questions) collapsed into
+   one giant "sentence" spanning several dates' claims, corrupting the
+   overlap check for all of them. Fixed by also splitting on newlines
+   and grouping units into blocks scoped by their nearest preceding date
+   mention.
+2. Word-overlap hits used plain substring containment: "definition" in
+   the answer matched inside "definitions" (the section's own boilerplate
+   header, present in every version), producing false hits unrelated to
+   the actual claim. Fixed with whole-word (`\b`) matching.
+3. "Distinctive" words were the first 5 words >6 chars by mere position,
+   which often grabbed the model's own meta-commentary ("version",
+   "introduced", "effective" -- none of which appear literally in the
+   regulation text at all) ahead of the real content word. Fixed by
+   requiring a candidate to actually appear somewhere in the retrieved
+   corpus text.
+4. Markdown bold (`**Notification event**`, the model's default way of
+   marking a defined term) was never stripped, so the leading `**`
+   silently broke the domain-word match on exactly the sentence carrying
+   the real signal. Fixed by extending the strip charset.
+
+Also addressed the KNOWN LIMITATION documented in golden_set.yaml since
+the original check was built: negation claims ("X was absent in version
+Y") read identically to a wrong positive claim, both `content_verified
+=False`. Fixed by detecting negation cues and flipping the pass
+condition -- but capped: with fewer than 2 discriminating words left
+after the filters above, a negated claim's overlap is a coin flip (one
+coincidental match dominates), so it now returns `content_verified=None`
+(can't verify) rather than guessing either way. `likely_correct_date` was
+added too: for a genuine non-negated misattribution, the check now
+searches the OTHER versions for where the flagged content actually
+matches, so the retry prompt can name the fix instead of just the error.
+
+**Verified, not assumed:** unit tests against a synthetic two-version
+lineage confirmed all three shapes (wrong positive misattribution now
+flagged with the correct likely_correct_date; correct negative claim no
+longer false-flagged; correct positive claim still passes). More
+importantly, verified LIVE: 7 real, uncached calls through the actual
+compiled agent graph against gpt-4o-mini (redis=None to force a genuine
+API call each time, not a cache hit) on the real
+`diachronic-notification-event-001` question, across several rounds as
+bugs were found and fixed mid-session. The last 5 consecutive runs (after
+all fixes) were all substantively correct AND correctly grounded, several
+on the first attempt with no retry needed -- a real improvement over
+D20's original "2 of 3 wrong, retry only fixed it 1/3 of the time." One
+earlier run's exact wrong claim ("introduced in the 2023-11-13 version")
+was caught with the correct `likely_correct_date=2024-05-13` hint, then
+the model self-corrected on retry, explicitly referencing the flagged
+error in its revised answer -- direct evidence the targeted retry (not
+just non-determinism) drove the fix.
+
+**Known limitation, left open, not hidden (matching this file's own
+standard, not a double standard applied to someone else's bug):** mid-
+session, one run's genuinely correct claim about 2024-05-13 was false-
+flagged inside a compound header+bullet block, forcing an unnecessary
+retry. Attempted to reproduce it offline for a permanent regression test;
+could not get a byte-exact repro (manual transcription of terminal
+output is not reliable for this -- smart quotes and whitespace differ
+from the raw string), and it did not recur in the next batch of live
+runs. This is still fundamentally a word-overlap heuristic, not a
+semantic check -- exactly what its own docstring already says it is. The
+underlying D20 hallucination (gpt-4o-mini's tendency to conflate
+"introduced in X" with "retained since X" across a version boundary) is
+real and not claimed fixed here, only caught more reliably and corrected
+more often within the existing retry budget.
+
+D46's remaining-work item 9 ("D20's underlying grounding bug still open")
+should be read as narrowed by this entry, not closed by it.

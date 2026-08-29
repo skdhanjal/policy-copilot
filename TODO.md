@@ -9,9 +9,16 @@ Status legend: `[ ]` not started, `[~]` in progress, `[x]` done.
 
 ## P0 -- correctness / security, blocks calling this production-ready
 
-- [ ] **1. D20 grounding bug**: diachronic date-attribution hallucination.
-  Agent retry loop (Phase 7) detects it (`agent_grounded: false`) but
-  cannot reliably fix it within `MAX_RETRIES=2`. Root cause still open.
+- [~] **1. D20 grounding bug**: diachronic date-attribution hallucination.
+  Narrowed, not closed (D56): the retry loop now targets the actual
+  flagged sentence instead of a generic warning, and the check itself
+  had four real bugs fixed (sentence-splitting, substring vs whole-word
+  matching, word-selection, markdown stripping). Verified live: last 5/5
+  uncached real runs correct and grounded, one earlier run's exact wrong
+  claim caught and self-corrected on retry. The underlying model
+  tendency to conflate "introduced in X" with "retained since X" is not
+  claimed fixed, only caught/corrected more reliably. One residual
+  heuristic false-positive seen once, not reproducible offline.
 - [ ] **2. Ingest path is broken-as-deployed**: `infra/jobs.tf`'s
   `google_cloud_run_v2_job.ingest` cannot actually run -- eCFR blocks
   Cloud Run's outbound IP range (D49). Real ingest path is a manual

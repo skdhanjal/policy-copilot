@@ -155,17 +155,19 @@ async def check_date_binding(question: str, answer: GeneratedAnswer, result: Ret
     bindings = check_date_bindings(answer.text, all_versions)
 
     # A claim with a real date but unverified content is a candidate
-    # misattribution. Known limitation (logged in golden_set.yaml):
-    # negation claims ("X was absent") also read as unverified, so this
-    # flags candidates for review, it doesn't prove a hallucination alone.
+    # misattribution. check_date_bindings now flips its pass condition for
+    # negation cues ("X was absent") -- see eval_metrics.py -- so this no
+    # longer conflates a correct negative claim with a wrong positive one,
+    # but it's still a word-overlap heuristic, not a proof.
     suspect = [b for b in bindings if b.date_exists_in_lineage and b.content_verified is False]
     return {
         "passed": len(suspect) == 0,
         "total_date_claims": len(bindings),
         "suspect_claims": [
-            {"date": b.claimed_date, "sentence": b.sentence} for b in suspect
+            {"date": b.claimed_date, "sentence": b.sentence, "likely_correct_date": b.likely_correct_date}
+            for b in suspect
         ],
-        "note": "Flags candidates; verify manually, especially for negation claims ('X was absent').",
+        "note": "Flags candidates; verify manually.",
     }
 
 

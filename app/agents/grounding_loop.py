@@ -11,7 +11,7 @@ from langgraph.runtime import Runtime
 
 from app.rag.retrieval import retrieve, RetrievalResult
 from app.rag.generate import generate, GeneratedAnswer
-from app.rag.eval_metrics import check_date_bindings
+from app.rag.eval_metrics import check_date_bindings, BindingCheck
 
 MAX_RETRIES = 2
 MAX_COST_USD = 0.05  # ~2-3x a single diachronic call's real cost (~$0.02)
@@ -25,6 +25,41 @@ class AgentState(TypedDict):
     grounded: bool
     total_cost: float
     start_time: float
+    suspect_bindings: list[BindingCheck]
+
+
+def _build_retry_question(question: str, suspects: list[BindingCheck]) -> str:
+    """Turn check_node's flagged bindings into a targeted correction prompt.
+
+    Previously the retry just repeated a generic "don't misattribute
+    facts" warning regardless of what was actually wrong, which is why it
+    only fixed the case ~1/3 of the time (D20). Pointing at the exact
+    flagged sentence -- and, when known, the version it actually belongs
+    to -- gives the model something concrete to correct instead of a
+    repeat of the same non-deterministic mistake.
+    """
+    if not suspects:
+        return (
+            f"{question}\n\n(Retry: your previous answer misattributed a fact "
+            "to the wrong version. Only attribute a claim to a version if it "
+            "appears verbatim in THAT version's block.)"
+        )
+
+    lines = [
+        f"{question}\n\nYour previous answer had the following date-attribution "
+        "error(s). Fix them specifically, do not just repeat a similar claim:"
+    ]
+    for b in suspects:
+        line = (
+            f'- You wrote: "{b.sentence}" and attributed this to {b.claimed_date}, '
+            f"but that exact content does not appear in the {b.claimed_date} version's block."
+        )
+        if b.likely_correct_date:
+            line += f" It actually appears in the {b.likely_correct_date} version -- attribute it there instead."
+        else:
+            line += " Re-check every version block and attribute it to whichever one actually contains this text, or state you cannot verify it."
+        lines.append(line)
+    return "\n".join(lines)
 
 @dataclass
 class AgentContext:
@@ -40,8 +75,8 @@ async def generate_node(state: AgentState, runtime: Runtime[AgentContext]) -> di
     retries = state.get("retries", 0)
     q = state["question"]
     if retries > 0:
-        q = f"{state['question']}\n\n(Retry {retries}: your previous answer misattributed a fact to the wrong version. Only attribute a claim to a version if it appears verbatim in THAT version's block.)"
-    
+        q = _build_retry_question(state["question"], state.get("suspect_bindings", []))
+
     answer = await generate(state["result"], q, redis=runtime.context.redis)
     
     call_cost = answer.llm_call.actual_cost_usd if answer.llm_call else 0.0
@@ -53,10 +88,10 @@ async def generate_node(state: AgentState, runtime: Runtime[AgentContext]) -> di
 def check_node(state: AgentState) -> dict:
     all_versions = [v for versions in state["result"].lineages.values() for v in versions]
     if not all_versions:
-        return {"grounded": True}
+        return {"grounded": True, "suspect_bindings": []}
     bindings = check_date_bindings(state["answer"].text, all_versions)
     suspect = [b for b in bindings if b.date_exists_in_lineage and b.content_verified is False]
-    return {"grounded": len(suspect) == 0}
+    return {"grounded": len(suspect) == 0, "suspect_bindings": suspect}
 
 
 def route_after_check(state: AgentState) -> str:
